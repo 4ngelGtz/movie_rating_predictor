@@ -5,8 +5,8 @@ movie at least 4. Every training feature must use only information available
 strictly before the rating event and must be reproducible by the future online
 serving path.
 
-No model or production feature pipeline has been implemented yet. The existing
-notebooks contain exploratory analysis only.
+No model or complete production feature pipeline has been implemented yet. The
+existing notebooks contain exploratory analysis only.
 
 ## Setup
 
@@ -79,6 +79,24 @@ aggregates. See [`docs/ENTITY_MODEL.md`](docs/ENTITY_MODEL.md) for entity grains
 keys, cardinalities, cold-start rules, source limitations, and how
 `src/entities` / `src/state` contracts, builders, and updates interact.
 
+## Phase 3: Feature Dictionary v1
+
+Phase 3 specifies the compact first-baseline feature set, exact formulas,
+strict point-in-time rules, online update behavior, dtypes, and leakage-safe
+cold-start fallbacks. It intentionally adds no feature builders. See
+[`docs/FEATURE_DICTIONARY_V1.md`](docs/FEATURE_DICTIONARY_V1.md) for the
+authoritative contract.
+
+## Phase 4A: Expanding historical features
+
+Phase 4A implements the leakage-safe temporal engine for global, user, and
+movie expanding rating count/mean/population-standard-deviation features in
+`src/features/expanding.py`. Equal-timestamp events are scored from one shared
+pre-batch state and applied only after the complete batch is emitted. The
+underlying sparse `count`/`mean`/`M2` state in `src/state/moments.py` has a
+deterministic, JSON-compatible checkpoint representation; checkpoint cutoffs,
+replay orchestration, and full materialization remain deferred to Phase 4E.
+
 ## Current notebooks
 
 > **Exploratory analysis only:** temporal calculations in the notebooks do not
@@ -95,5 +113,7 @@ keys, cardinalities, cold-start rules, source limitations, and how
 
 See [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) for the phased
 plan, [`docs/TEMPORAL_CONTRACT.md`](docs/TEMPORAL_CONTRACT.md) for the rules that
-all future features must follow, and [`docs/ENTITY_MODEL.md`](docs/ENTITY_MODEL.md)
-for the canonical Phase 2 entity/state model.
+all future features must follow, [`docs/ENTITY_MODEL.md`](docs/ENTITY_MODEL.md)
+for the canonical Phase 2 entity/state model, and
+[`docs/FEATURE_DICTIONARY_V1.md`](docs/FEATURE_DICTIONARY_V1.md) for the Phase 3
+feature contract.

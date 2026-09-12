@@ -1,0 +1,203 @@
+# Feature Dictionary v1
+
+This document is the authoritative Phase 3 feature contract for the first
+modeling baseline. It specifies features; it does not implement feature
+builders, choose temporal split dates, or define a final model.
+
+## 1. Inherited contracts
+
+Feature rows have the grain of one canonical `rating_event` and are computed
+immediately before that event's recorded `timestamp`. The target event's
+`rating` and `highRating` are never inputs. All timestamp-bearing history is
+selected with the Phase 1 rule `event.timestamp < prediction_timestamp`; a
+fixed window is `[prediction_timestamp - window, prediction_timestamp)`.
+
+All events at one timestamp are simultaneous. Offline and online builders must
+therefore use this order:
+
+```text
+read state before t -> score every event at t -> apply the complete t batch
+```
+
+`ratingEventId` is immutable provenance, not temporal order. Each canonical
+event updates global, user, and movie state once. A movie-genre bridge join may
+produce one update per `(ratingEventId, genreId)`, but must not create another
+canonical event or change canonical event counts. Checkpoints represent complete
+`H(checkpointCutoff)` and replay only complete batches in
+`[checkpointCutoff, t)` with idempotency at the Phase 2 provenance grain.
+
+## 2. Notation and shared policies
+
+For a target event `(u, m, t)`, let
+
+- `H(t) = {i | t_i < t}` be all legal prior canonical rating events;
+- `H_u(t)` and `H_m(t)` be the subsets for user `u` and movie `m`;
+- `H_m,30(t) = {i | movieId_i=m, t-30 days <= t_i < t}`;
+- `r_i` be the raw rating in `[0.5, 5.0]`;
+- `G(m)` be the set of distinct `genreId` values in the validated
+  `movie_genre` bridge for `m`;
+- `H_ug(t) = {i | userId_i=u, g in G(movieId_i), t_i<t}`;
+- `n(A)=|A|`, `s(A)=sum_{i in A} r_i`, and
+  `mean(A)=s(A)/n(A)` for nonempty `A`;
+- `pop_sd(A) = sqrt(sum_{i in A}(r_i-mean(A))^2/n(A))` for nonempty
+  `A`. This is population, not sample, standard deviation.
+
+Counts are exact event or relationship-update counts and never count a missing
+fallback as an observation. Rating sums and sum-of-squares must be accumulated
+in `float64`; exposed means and standard deviations are `float32`.
+
+### Fallback root
+
+`global_mean_rating(t)` is the mean of `H(t)`. When `H(t)` is empty, it is the
+fixed constant `3.5`, the midpoint of the allowed MovieLens rating scale. This
+constant is configuration, not fitted data. No full-dataset or later-training
+aggregate is legal. User means fall back to this point-in-time global mean;
+movie means do the same; target-genre user means fall back to the resolved user
+mean. Standard deviations fall back to `0.0` only when support is zero; for one
+observation population standard deviation is exactly `0.0`. Support features
+make these fallback cases distinguishable.
+
+Historical validation/test replay must update state after each complete scored
+timestamp batch so the features remain the exact `H(t)` quantities defined
+here. A frozen-at-split evaluation would measure stale-state variants and must
+not reuse these feature names. Online serving can produce the exact values when
+prior rating outcomes have arrived by their recorded timestamps; delayed or
+missing outcomes are a serving-state limitation that must be monitored rather
+than backfilled from future data.
+
+### Static catalog assumption
+
+MovieLens supplies no availability timestamps for `movies` or its genre
+labels. V1 adopts a declared, versioned **frozen catalog snapshot** assumption:
+the canonical `movies` row and validated `movie_genre` memberships in the
+processed snapshot are treated as intrinsic movie metadata available whenever
+that movie can be scored. This gives offline/online parity when serving loads
+the same catalog snapshot, but historical availability cannot be proven from
+the source. Results using genre/year features must disclose this limitation and
+should be compared with a dynamic-history-only baseline.
+
+`releaseYear` is the conservative terminal-title parse defined in Phase 2. It
+is not a release date. Missing static values remain missing rather than being
+filled from later data; an explicit missingness feature accompanies release
+year and age.
+
+## 3. Accepted v1 features
+
+Every feature in this table is available to the preferred offline/online v1
+model under the policies above. “After event” in an update rule always means
+after every event in the timestamp batch has been scored.
+
+| `feature_name` | `feature_family` / `entity` / `state_key` | `mathematical_definition` | `source_data` | `temporal_window` | `point_in_time_rule` | `online_availability` | `update_rule` | `cold_start_fallback` | `expected_type` |
+|---|---|---|---|---|---|---|---|---|---|
+| `global_rating_count` | Global history; singleton state | `n(H(t))` | `rating_events.ratingEventId`, `timestamp` | Expanding | Count distinct canonical events with `timestamp < t`; never genre-expanded rows. | Yes; scalar state | After event, increment once per previously unapplied `ratingEventId`. | `0` | `uint64`, non-null |
+| `global_mean_rating` | Global history; singleton state | `mean(H(t))` when nonempty | `rating_events.ratingEventId`, `rating`, `timestamp` | Expanding | Same legal set `H(t)`; the target and its entire simultaneous batch are excluded. | Yes; scalar count and `float64` sum | After event, add its rating once and increment count once. | Fixed `3.5` only when global count is zero | `float32`, non-null |
+| `user_rating_count` | User history; `user_state(userId)` | `n(H_u(t))` | `rating_events.ratingEventId`, `userId`, `timestamp` | Expanding | Only canonical events for `u` with `timestamp < t`. | Yes | Increment once for `(userId, ratingEventId)`. | `0` | `uint64`, non-null |
+| `user_mean_rating` | User history; `user_state(userId)` | `mean(H_u(t))` when nonempty | `rating_events.ratingEventId`, `userId`, `rating`, `timestamp` | Expanding | Same `H_u(t)` as the support count. | Yes | Add rating to `float64` user sum and increment user count once. | `global_mean_rating(t)` | `float32`, non-null |
+| `user_rating_std_pop` | User history; `user_state(userId)` | `pop_sd(H_u(t))` | `rating_events.ratingEventId`, `userId`, `rating`, `timestamp` | Expanding | Same `H_u(t)`; population divisor is `n`, including at `n=1`. | Yes | Update count, mean, and `M2` with a numerically stable population-variance recurrence once per event. | `0.0` when count is zero; exactly `0.0` at count one | `float32`, non-null |
+| `user_seconds_since_last_rating` | User history; `user_state(userId)` | `(t - max_{i in H_u(t)} t_i)` in elapsed seconds | `rating_events.userId`, `timestamp` | Expanding last observation | Maximum timestamp must be strictly less than `t`; equal-time rows cannot become “last.” | Yes | After the batch, set last timestamp to the batch timestamp for each touched user. | Missing | nullable `float64` seconds, nonnegative |
+| `movie_rating_count` | Movie history; `movie_state(movieId)` | `n(H_m(t))` | `rating_events.ratingEventId`, `movieId`, `timestamp` | Expanding | Only canonical events for `m` with `timestamp < t`. | Yes | Increment once for `(movieId, ratingEventId)`. | `0` | `uint64`, non-null |
+| `movie_mean_rating` | Movie history; `movie_state(movieId)` | `mean(H_m(t))` when nonempty | `rating_events.ratingEventId`, `movieId`, `rating`, `timestamp` | Expanding | Same `H_m(t)` as the support count. | Yes | Add rating to `float64` movie sum and increment movie count once. | `global_mean_rating(t)` | `float32`, non-null |
+| `movie_rating_std_pop` | Movie history; `movie_state(movieId)` | `pop_sd(H_m(t))` | `rating_events.ratingEventId`, `movieId`, `rating`, `timestamp` | Expanding | Same `H_m(t)`; population divisor is `n`. | Yes | Update count, mean, and `M2` once per event. | `0.0` when count is zero; exactly `0.0` at count one | `float32`, non-null |
+| `movie_rating_count_30d` | Movie activity; keyed by `movieId` | `n(H_m,30(t))` | `rating_events.ratingEventId`, `movieId`, `timestamp` | Trailing 30 elapsed days | Includes the left boundary `t-30 days`; excludes `t` and all simultaneous events. | Yes, with a timestamped queue/buckets that preserve second-level boundary semantics | After the batch, add each event once; before reads, evict only timestamps `< t-30 days`, not the inclusive boundary. | `0` | `uint64`, non-null |
+| `user_target_genre_rating_count` | User × target genres; `user_genre_state(userId, genreId)` | `sum_{g in G(m)} n(H_ug(t))` | `rating_events`; validated `movie_genre` | Expanding relationship associations | Build every `H_ug(t)` only from events before `t`, then sum target-genre states. A prior event sharing two target genres contributes two associations by definition, but remains one canonical event. | Yes under frozen catalog assumption | For each distinct bridge membership of an event's movie, increment `(userId, genreId)` once with the same `ratingEventId`. | `0`; also `0` when `G(m)` is empty | `uint64`, non-null |
+| `user_target_genre_mean_rating` | User × target genres; `user_genre_state(userId, genreId)` | `sum_{g in G(m)} s(H_ug(t)) / sum_{g in G(m)} n(H_ug(t))` when denominator is positive | `rating_events`; validated `movie_genre` | Expanding relationship associations | Numerator and denominator use identical strict-prior user-genre states. Overlap weighting is intentional and documented by the support count. | Yes under frozen catalog assumption | Add rating and count once per distinct `(ratingEventId, genreId)` after scoring the batch. | `user_mean_rating(t)` when association count is zero or `G(m)` is empty | `float32`, non-null |
+| `user_target_genre_mean_delta` | User × genre relative preference | `user_target_genre_mean_rating - user_mean_rating` | The two resolved v1 features above | Expanding derived feature | Both operands come from the same pre-`t` state and their specified fallbacks. | Yes; derived at read time | No independent state update. | `0.0` follows from the target-genre mean fallback | `float32`, non-null |
+| `movie_genre_count` | Static movie context; `movie_genre(movieId, genreId)` | `|G(m)|` | Validated `movie_genre` | Static snapshot | Use only the versioned frozen catalog snapshot; count distinct bridge keys. | Yes under frozen catalog assumption | Changes only when deploying a new catalog snapshot, never from a rating event. | `0` for `genreStatus=missing_in_source` | `uint8`, non-null |
+| `movie_release_year` | Static movie context; `movie(movieId)` | Conservative Phase 2 `releaseYear` parse | `movies.title` via canonical movie builder | Static snapshot | Use only the versioned frozen catalog snapshot; do not derive from future events or external APIs. | Yes under frozen catalog assumption | Changes only with a versioned catalog correction/redeployment. | Missing | nullable `int16` |
+| `movie_release_year_missing` | Static movie context; `movie(movieId)` | `1` iff canonical `releaseYear` is missing, else `0` | Canonical `movie.releaseYear` | Static snapshot | Same snapshot as `movie_release_year`. | Yes under frozen catalog assumption | Recompute only with a versioned catalog deployment. | `true` when year is missing | `bool`, non-null |
+| `movie_age_years` | Movie × prediction context | `(t - Timestamp(releaseYear, Jan 1, 00:00:00)) / (365.2425 days)` | Canonical `movie.releaseYear`; prediction `timestamp` | Static attribute plus current time | Use the target timestamp and frozen release year only. Do not clamp negative values: they reveal source inconsistency rather than silently changing semantics. | Yes under frozen catalog assumption | No rating-state update; compute at read time. | Missing when release year is missing | nullable `float32` years |
+
+The feature output must retain `ratingEventId` for audit joins, but it is not a
+predictor. `userId`, `movieId`, and prediction `timestamp` are observation
+context/keys, not numeric model features unless a later contract explicitly
+introduces a valid encoding.
+
+## 4. Candidate disposition
+
+### Accept for v1
+
+The 17 features above are the smallest useful mix found in the current
+repository: two global context/fallback features, four user-history features,
+four movie-history/activity features, three compact genre-preference features,
+and four static/context features. Support and missingness features are retained
+because they let the model distinguish evidence from fallback values.
+
+### Defer
+
+| Candidate | Reason |
+|---|---|
+| User/movie/global high-rating count or rate | Closely related to mean raw rating and directly derived from the target threshold; test incremental value after the baseline. |
+| Genre population count/mean/rate | Adds another overlapping relationship state and fallback layer; first measure whether user-target-genre history adds value. |
+| Multiple recent popularity windows | Correlated feature expansion and additional eviction state; 30 days is one explicit first baseline. |
+| Recent user means, slopes, or first-vs-last drift | EDA motivates drift, but a stable online trend estimator and minimum-support policy need separate design. |
+| Per-genre one-hot model columns | Encoding belongs to the Phase 5 model pipeline; the Phase 3 state contract retains canonical genre keys without committing to a changing column vocabulary. |
+| Raw title or title-derived tokens | High-dimensional text processing is outside the interpretable baseline. |
+| Tag event features | Tags obey `< t` but require text normalization, user-generated availability semantics, and online tag ingestion. |
+| Genome scores/tags | Undated snapshot with unknown historical availability and 1,128-dimensional expansion. |
+| Director/actor and user-person features | No current stable person IDs or mappings; Phase 2 explicitly blocks materialization. |
+| External IDs (`imdbId`, `tmdbId`) | Join keys, not ordinal predictors; retain for future versioned enrichment only. |
+
+### Reject
+
+| Candidate | Reason |
+|---|---|
+| Current rating or `highRating` | The outcome being predicted; direct leakage. |
+| Full-dataset or full-training-period aggregate attached to earlier rows | Contains outcomes later than those rows even if called a prior or imputation value. |
+| File-order, DataFrame-index, movie-ID, user-ID, or `ratingEventId` ordering | Fabricates chronology within equal timestamps; IDs are identity, not time. |
+| Raw IDs as continuous numeric predictors | Numeric magnitude has no contracted predictive meaning and does not generalize to unseen entities. |
+| User × movie history | No repeated pairs in the current extract, so it has no demonstrated baseline signal and adds state without purpose. |
+| Random-split target aggregates | Violates the event-time training contract. |
+| Counting exploded genre rows as rating events | Breaks canonical event grain and biases global/user/movie counts. |
+
+## 5. Leakage and parity audit
+
+- **Simultaneous events:** every dynamic feature reads one immutable pre-batch
+  snapshot. Only after all rows at `t` are emitted may the batch update state.
+- **Cold start:** unseen keys have zero support. All rating means descend through
+  point-in-time state to the fixed `3.5` root; no future aggregate is used.
+  Recency and unavailable release metadata remain genuinely missing.
+- **Global priors:** global count/mean are historical online state, not fitted
+  constants. The only constant is the declared rating-scale midpoint. Any later
+  scaler, encoder, or imputer must be fit on the training partition and frozen
+  for validation/test/serving, without changing historical feature values.
+- **Genre expansion:** bridge keys are unique and every expanded update retains
+  `ratingEventId`. Global, user, and movie counts use canonical events only.
+  User-target-genre counts intentionally count associations and are named as
+  such; overlap cannot masquerade as canonical event support.
+- **State updates:** idempotency is checked at `(state table, entity key,
+  ratingEventId)`. Window eviction preserves the inclusive left boundary.
+- **Source verification:** all dynamic columns exist in canonical
+  `ratings.parquet`; static `title`/`genres` inputs exist in `movies.parquet`;
+  `releaseYear`, `genreStatus`, `ratingEventId`, `highRating`, and bridge tables
+  are canonical Phase 2 derived fields rather than Phase 0 Parquet columns.
+- **Online feasibility:** expanding features require small count/sum/M2/last-time
+  state; the 30-day count additionally requires timestamped eviction state.
+  Genre and year features require the identical versioned catalog snapshot.
+
+## 6. Open question before Phase 4
+
+The feature semantics are closed. One operational provenance choice remains:
+the repository has no catalog-snapshot version field or manifest. Phase 4 must
+choose a deterministic identifier (preferably a content digest of canonical
+`movies` plus `movie_genre`) and persist it with feature output/checkpoints so
+offline and online code can prove they used the same frozen static snapshot.
+
+## 7. Phase 4 implementation order
+
+1. Implement a timestamp-batch iterator that assigns features from pre-batch
+   state, then applies the complete batch, with shuffle/tie regression tests.
+2. Implement the singleton global accumulator and shared count/sum/M2 logic;
+   expose user and movie expanding features plus fallback resolution.
+3. Add user last-rating time and the exact `[t-30 days, t)` movie queue, including
+   left-boundary and replay/idempotency tests.
+4. Build the validated movie-genre bridge once, then add user-genre accumulators
+   and target-genre read-time aggregation while asserting canonical event-count
+   conservation.
+5. Add versioned static catalog joins and release-age calculation, including
+   missing and negative-age cases.
+6. Compare a dynamic-only build with the full v1 build, run on a small fixture,
+   then on the canonical Parquet data. Materialize only after equality between
+   uninterrupted replay and checkpoint/replay is demonstrated.
+
+Exact temporal split dates are a Phase 5 choice. They do not alter any feature
+definition above, but must be fixed before reporting validation or test metrics.
