@@ -164,7 +164,11 @@ def test_output_conserves_event_identity_and_contract_dtypes() -> None:
     for column in ("global_rating_count", "user_rating_count", "movie_rating_count"):
         assert str(result[column].dtype) == "uint64"
     for column in set(FEATURE_COLUMNS) - {
-        "global_rating_count", "user_rating_count", "movie_rating_count"
+        "global_rating_count",
+        "user_rating_count",
+        "user_seconds_since_last_rating",
+        "movie_rating_count",
+        "movie_rating_count_30d",
     }:
         assert str(result[column].dtype) == "float32"
 

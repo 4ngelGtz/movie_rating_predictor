@@ -97,6 +97,14 @@ underlying sparse `count`/`mean`/`M2` state in `src/state/moments.py` has a
 deterministic, JSON-compatible checkpoint representation; checkpoint cutoffs,
 replay orchestration, and full materialization remain deferred to Phase 4E.
 
+## Phase 4B: Recency and rolling activity
+
+Phase 4B extends the same timestamp-batch engine with user rating recency in
+elapsed seconds and canonical movie rating activity over the exact trailing
+`[t - 30 days, t)` interval. Sparse last-user timestamps and rolling movie
+timestamp batches live alongside the expanding state, and current-batch events
+become visible only after every tied row is emitted.
+
 ## Current notebooks
 
 > **Exploratory analysis only:** temporal calculations in the notebooks do not

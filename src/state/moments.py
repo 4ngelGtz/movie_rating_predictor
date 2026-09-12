@@ -8,9 +8,25 @@ by the feature builder rather than encoded as observations in this state.
 
 from __future__ import annotations
 
+from collections import deque
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 import math
-from typing import Any, Iterable, Mapping
+from typing import Any
+
+import pandas as pd
+
+
+MOVIE_ACTIVITY_WINDOW = pd.Timedelta(days=30)
+
+
+def _timestamp(value: Any) -> pd.Timestamp:
+    timestamp = pd.Timestamp(value)
+    if pd.isna(timestamp):
+        raise ValueError("timestamp must not be missing")
+    if timestamp.tz is not None:
+        raise ValueError("timestamp must be timezone-naive")
+    return timestamp
 
 
 @dataclass(slots=True)
@@ -97,21 +113,50 @@ class RunningMoments:
 
 @dataclass(slots=True)
 class HistoricalRatingState:
-    """Sparse global, user, and movie moments for complete timestamp batches."""
+    """Sparse rating moments and temporal state for complete timestamp batches."""
 
     global_moments: RunningMoments = field(default_factory=RunningMoments)
     user_moments: dict[int, RunningMoments] = field(default_factory=dict)
     movie_moments: dict[int, RunningMoments] = field(default_factory=dict)
+    last_user_rating: dict[int, pd.Timestamp] = field(default_factory=dict)
+    movie_rating_count_30d: dict[int, int] = field(default_factory=dict)
+    _movie_rating_batches_30d: deque[
+        tuple[pd.Timestamp, tuple[tuple[int, int], ...]]
+    ] = field(default_factory=deque)
+
+    def expire_movie_activity(self, prediction_timestamp: Any) -> None:
+        """Expire events strictly older than ``t - 30 days``.
+
+        Events exactly on the left boundary remain eligible. Timestamp batches
+        are stored once, so each batch enters and leaves the queue once.
+        """
+        boundary = _timestamp(prediction_timestamp) - MOVIE_ACTIVITY_WINDOW
+        while (
+            self._movie_rating_batches_30d
+            and self._movie_rating_batches_30d[0][0] < boundary
+        ):
+            _, movie_counts = self._movie_rating_batches_30d.popleft()
+            for movie_id, count in movie_counts:
+                remaining = self.movie_rating_count_30d[movie_id] - count
+                if remaining:
+                    self.movie_rating_count_30d[movie_id] = remaining
+                else:
+                    del self.movie_rating_count_30d[movie_id]
 
     def apply_timestamp_batch(
         self,
         ratings: Iterable[tuple[int, int, float]],
+        *,
+        timestamp: Any | None = None,
     ) -> None:
         """Apply one already-scored timestamp batch atomically to all states.
 
         Each tuple is ``(userId, movieId, rating)`` for one canonical event.
         The caller is responsible for passing each event exactly once.  Batch
         moments are reduced independently of input order before being merged.
+        When ``timestamp`` is supplied, recency and rolling state are updated
+        for the complete batch as well. The optional form preserves the Phase
+        4A moments-only API.
         """
         batch = [
             (int(user_id), int(movie_id), float(rating))
@@ -119,6 +164,7 @@ class HistoricalRatingState:
         ]
         if not batch:
             return
+        batch_timestamp = _timestamp(timestamp) if timestamp is not None else None
 
         self.global_moments.merge(
             RunningMoments.from_values(rating for _, _, rating in batch)
@@ -139,6 +185,18 @@ class HistoricalRatingState:
                 RunningMoments.from_values(movies[movie_id])
             )
 
+        if batch_timestamp is not None:
+            for user_id in sorted(users):
+                self.last_user_rating[user_id] = batch_timestamp
+            movie_counts = tuple(
+                (movie_id, len(movies[movie_id])) for movie_id in sorted(movies)
+            )
+            self._movie_rating_batches_30d.append((batch_timestamp, movie_counts))
+            for movie_id, count in movie_counts:
+                self.movie_rating_count_30d[movie_id] = (
+                    self.movie_rating_count_30d.get(movie_id, 0) + count
+                )
+
     def to_dict(self) -> dict[str, Any]:
         """Return deterministic, JSON-compatible checkpoint content."""
         return {
@@ -151,13 +209,32 @@ class HistoricalRatingState:
                 {"movieId": key, **self.movie_moments[key].to_dict()}
                 for key in sorted(self.movie_moments)
             ],
+            "lastUserRatings": [
+                {"userId": key, "timestamp": self.last_user_rating[key].isoformat()}
+                for key in sorted(self.last_user_rating)
+            ],
+            "movieRatingBatches30d": [
+                {
+                    "timestamp": timestamp.isoformat(),
+                    "movies": [
+                        {"movieId": movie_id, "count": count}
+                        for movie_id, count in movie_counts
+                    ],
+                }
+                for timestamp, movie_counts in self._movie_rating_batches_30d
+            ],
         }
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> HistoricalRatingState:
         """Restore a deterministic checkpoint representation."""
-        if set(payload) != {"global", "users", "movies"}:
-            raise ValueError("state payload must contain exactly global, users, and movies")
+        phase_4a_keys = {"global", "users", "movies"}
+        phase_4b_keys = phase_4a_keys | {
+            "lastUserRatings",
+            "movieRatingBatches30d",
+        }
+        if set(payload) not in (phase_4a_keys, phase_4b_keys):
+            raise ValueError("state payload has unexpected or missing fields")
 
         state = cls(global_moments=RunningMoments.from_dict(payload["global"]))
         for row in payload["users"]:
@@ -174,4 +251,30 @@ class HistoricalRatingState:
             state.movie_moments[movie_id] = RunningMoments.from_dict(
                 {key: row[key] for key in ("count", "mean", "M2")}
             )
+
+        for row in payload.get("lastUserRatings", []):
+            user_id = int(row["userId"])
+            if user_id in state.last_user_rating:
+                raise ValueError(f"duplicate userId in recency payload: {user_id}")
+            state.last_user_rating[user_id] = _timestamp(row["timestamp"])
+
+        previous_timestamp: pd.Timestamp | None = None
+        for row in payload.get("movieRatingBatches30d", []):
+            timestamp = _timestamp(row["timestamp"])
+            if previous_timestamp is not None and timestamp <= previous_timestamp:
+                raise ValueError("rolling timestamp batches must be strictly increasing")
+            previous_timestamp = timestamp
+            seen_movies: set[int] = set()
+            movie_counts: list[tuple[int, int]] = []
+            for movie in row["movies"]:
+                movie_id = int(movie["movieId"])
+                count = int(movie["count"])
+                if movie_id in seen_movies or count <= 0:
+                    raise ValueError("rolling batch movie keys must be unique and positive")
+                seen_movies.add(movie_id)
+                movie_counts.append((movie_id, count))
+                state.movie_rating_count_30d[movie_id] = (
+                    state.movie_rating_count_30d.get(movie_id, 0) + count
+                )
+            state._movie_rating_batches_30d.append((timestamp, tuple(movie_counts)))
         return state

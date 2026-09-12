@@ -22,9 +22,11 @@ FEATURE_COLUMNS = (
     "user_rating_count",
     "user_mean_rating",
     "user_rating_std_pop",
+    "user_seconds_since_last_rating",
     "movie_rating_count",
     "movie_mean_rating",
     "movie_rating_std_pop",
+    "movie_rating_count_30d",
 )
 
 
@@ -55,22 +57,31 @@ def _resolved_features(
     state: HistoricalRatingState,
     user_id: int,
     movie_id: int,
-) -> tuple[int, float, int, float, float, int, float, float]:
+    prediction_timestamp: pd.Timestamp,
+) -> tuple[int, float, int, float, float, float, int, float, float, int]:
     global_moments = state.global_moments
     global_mean = (
         global_moments.mean if global_moments.count else GLOBAL_MEAN_COLD_START
     )
     user_moments = state.user_moments.get(user_id, RunningMoments())
     movie_moments = state.movie_moments.get(movie_id, RunningMoments())
+    previous_user_rating = state.last_user_rating.get(user_id)
+    user_seconds_since_last_rating = (
+        (prediction_timestamp - previous_user_rating).total_seconds()
+        if previous_user_rating is not None
+        else np.nan
+    )
     return (
         global_moments.count,
         global_mean,
         user_moments.count,
         user_moments.mean if user_moments.count else global_mean,
         user_moments.population_std,
+        user_seconds_since_last_rating,
         movie_moments.count,
         movie_moments.mean if movie_moments.count else global_mean,
         movie_moments.population_std,
+        state.movie_rating_count_30d.get(movie_id, 0),
     )
 
 
@@ -91,9 +102,11 @@ def build_expanding_rating_features(rating_events: pd.DataFrame) -> pd.DataFrame
         "user_rating_count": np.empty(event_count, dtype=np.uint64),
         "user_mean_rating": np.empty(event_count, dtype=np.float32),
         "user_rating_std_pop": np.empty(event_count, dtype=np.float32),
+        "user_seconds_since_last_rating": np.empty(event_count, dtype=np.float64),
         "movie_rating_count": np.empty(event_count, dtype=np.uint64),
         "movie_mean_rating": np.empty(event_count, dtype=np.float32),
         "movie_rating_std_pop": np.empty(event_count, dtype=np.float32),
+        "movie_rating_count_30d": np.empty(event_count, dtype=np.uint64),
     }
     if event_count == 0:
         return pd.concat(
@@ -109,16 +122,25 @@ def build_expanding_rating_features(rating_events: pd.DataFrame) -> pd.DataFrame
     work = work.sort_values("timestamp", kind="stable")
     state = HistoricalRatingState()
 
-    for _, batch in work.groupby("timestamp", sort=False):
+    for timestamp, batch in work.groupby("timestamp", sort=False):
+        state.expire_movie_activity(timestamp)
         for row in batch.itertuples(index=False):
             position = row.inputPosition
-            resolved = _resolved_features(state, int(row.userId), int(row.movieId))
+            resolved = _resolved_features(
+                state,
+                int(row.userId),
+                int(row.movieId),
+                timestamp,
+            )
             for column, value in zip(FEATURE_COLUMNS, resolved, strict=True):
                 values[column][position] = value
 
         state.apply_timestamp_batch(
-            (int(row.userId), int(row.movieId), float(row.rating))
-            for row in batch.itertuples(index=False)
+            (
+                (int(row.userId), int(row.movieId), float(row.rating))
+                for row in batch.itertuples(index=False)
+            ),
+            timestamp=timestamp,
         )
 
     return pd.concat(
