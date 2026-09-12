@@ -16,12 +16,10 @@ should proceed in small, testable phases.
 
 ## Phase 1 — Temporal and entity definitions
 
-1. Turn the rules in `TEMPORAL_CONTRACT.md` into tests, including identical
-   timestamps and rolling-window boundaries.
-2. Document the schemas and keys for users, movies, genres, people, rating
-   events, and cross-entity states.
-3. Decide deterministic ordering for events with the same timestamp before any
-   feature implementation.
+Completed in the temporal contract layer, tests, and reproducible data audit.
+Equal timestamps are simultaneous; deterministic physical row order is not a
+temporal tie-breaker. Detailed entity/cross-entity feature schemas remain Phase
+2 work because Phase 1 intentionally defines semantics without building them.
 
 ## Phase 2 — Feature specification
 

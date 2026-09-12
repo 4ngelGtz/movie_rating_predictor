@@ -57,7 +57,24 @@ timezone metadata, so they are preserved as timezone-naive values with an
 unknown source timezone. Genome relevance is stored as `float32`, which may
 introduce the small approximation expected from that representation.
 
+## Phase 1: Temporal contract
+
+Phase 1 defines and tests the strict point-in-time rule used by all future
+features: an event is available only when `event_timestamp < prediction_time`.
+Equal-timestamp events are simultaneous, and rolling windows use `[t - W, t)`.
+See [`docs/TEMPORAL_CONTRACT.md`](docs/TEMPORAL_CONTRACT.md) for the complete
+contract and measured data audit. Reproduce the ratings audit with:
+
+```bash
+python -m src.data.audit_temporal
+```
+
 ## Current notebooks
+
+> **Exploratory analysis only:** temporal calculations in the notebooks do not
+> necessarily satisfy the production temporal contract. In particular, do not
+> reuse tie ordering, current-row rolling values, or full-history quantities as
+> predictive features.
 
 - `01_temporal_high_rate_analysis.ipynb` studies high-rating behavior over
   calendar time and within each user's rating history.
