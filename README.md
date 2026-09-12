@@ -41,6 +41,22 @@ movie_rating_predictor/
 Generated data is ignored by Git. Keep the MovieLens source files in
 `data/raw/` and never edit them in place.
 
+## Phase 0: Parquet data layer
+
+With the environment activated, validate and convert all six raw sources:
+
+```bash
+python -m src.data.build_parquet
+```
+
+The command reads the immutable CSV files in `data/raw/`, validates their
+schemas and values, and writes one Snappy-compressed Parquet file per source to
+`data/processed/`. These typed Parquet files are the canonical processed input
+for later phases. Raw files are never modified. Source timestamps contain no
+timezone metadata, so they are preserved as timezone-naive values with an
+unknown source timezone. Genome relevance is stored as `float32`, which may
+introduce the small approximation expected from that representation.
+
 ## Current notebooks
 
 - `01_temporal_high_rate_analysis.ipynb` studies high-rating behavior over
