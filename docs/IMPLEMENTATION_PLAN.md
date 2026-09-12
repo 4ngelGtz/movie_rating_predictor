@@ -14,28 +14,33 @@ should proceed in small, testable phases.
 5. Read each Parquet output back and verify its schema and row count against the
    source without changing anything in `data/raw/`.
 
-## Phase 1 — Temporal and entity definitions
+## Phase 1 — Temporal contract
 
 Completed in the temporal contract layer, tests, and reproducible data audit.
 Equal timestamps are simultaneous; deterministic physical row order is not a
-temporal tie-breaker. Detailed entity/cross-entity feature schemas remain Phase
-2 work because Phase 1 intentionally defines semantics without building them.
+temporal tie-breaker.
 
-## Phase 2 — Feature specification
+## Phase 2 — Entity definitions
+
+Define canonical users, movies, genres, people, rating events, relationship
+bridges, and sparse point-in-time state identity. Preserve source-event
+provenance across multi-valued relationships. Do not fabricate unavailable
+actor/director identities or implement predictive aggregates.
+
+## Phase 3 — Feature specification and enrichment
 
 Create a feature dictionary before feature code. For each feature, record its
 formula, source, window, strict point-in-time rule, online update rule, fallback,
-and dtype. Start with user, movie, and user-genre state; defer people-based
-features until cached metadata exists.
+and dtype. Cache normalized TMDb movie-director and movie-actor mappings using
+stable IDs before enabling people-based state.
 
-## Phase 3 — Enrichment and feature builders
+## Phase 4 — Feature builders
 
-Cache normalized TMDb movie-director and movie-actor mappings using stable IDs.
-Then implement small pandas functions whose state transitions are shared by
+Implement small pandas functions whose state transitions are shared by
 historical dataset construction and online updates. Test leakage prevention and
 cold-start behavior before scaling to the full ratings file.
 
-## Phase 4 — Training and serving
+## Phase 5 — Training and serving
 
 Build event-level labeled rows, define temporal train/validation/test cutoffs,
 and train a simple baseline. Materialize current state and add entity-based

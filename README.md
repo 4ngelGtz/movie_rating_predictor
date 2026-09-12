@@ -29,7 +29,9 @@ movie_rating_predictor/
 ├── notebooks/        # Exploration and validation, not production logic
 ├── src/
 │   ├── data/         # Ingestion, schema validation, and Parquet conversion
+│   ├── entities/     # Canonical entity contracts and relational builders
 │   ├── features/     # Shared offline/online feature definitions
+│   ├── state/        # Point-in-time state contracts and update provenance
 │   ├── training/     # Dataset construction, temporal splits, and training
 │   └── serving/      # Future FastAPI application and state updates
 ├── tests/
@@ -69,6 +71,14 @@ contract and measured data audit. Reproduce the ratings audit with:
 python -m src.data.audit_temporal
 ```
 
+## Phase 2: Entity definitions
+
+Phase 2 defines canonical users, movies, genres, rating events, relationship
+bridges, and sparse point-in-time state identity. It does not compute predictive
+aggregates. See [`docs/ENTITY_MODEL.md`](docs/ENTITY_MODEL.md) for entity grains,
+keys, cardinalities, cold-start rules, source limitations, and how
+`src/entities` / `src/state` contracts, builders, and updates interact.
+
 ## Current notebooks
 
 > **Exploratory analysis only:** temporal calculations in the notebooks do not
@@ -81,8 +91,9 @@ python -m src.data.audit_temporal
 - `02_genre_rating_eda.ipynb` studies the multi-label genre taxonomy and rating
   outcomes by genre.
 
-## Next work
+## Project contracts
 
 See [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) for the phased
-plan and [`docs/TEMPORAL_CONTRACT.md`](docs/TEMPORAL_CONTRACT.md) for the rules
-that all future features, training data, and serving code must follow.
+plan, [`docs/TEMPORAL_CONTRACT.md`](docs/TEMPORAL_CONTRACT.md) for the rules that
+all future features must follow, and [`docs/ENTITY_MODEL.md`](docs/ENTITY_MODEL.md)
+for the canonical Phase 2 entity/state model.
