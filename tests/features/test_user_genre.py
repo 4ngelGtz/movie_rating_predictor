@@ -7,11 +7,11 @@ import pandas.testing as pdt
 import pytest
 
 from src.features.expanding import (
-    FEATURE_COLUMNS,
+    DYNAMIC_FEATURE_COLUMNS as FEATURE_COLUMNS,
     _resolved_features,
-    build_expanding_rating_features,
 )
 from src.state.moments import HistoricalRatingState
+from tests.features.catalog_fixtures import build_features as build_expanding_rating_features
 
 
 T = pd.Timestamp("2020-01-01 10:00:00")

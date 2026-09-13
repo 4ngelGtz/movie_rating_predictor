@@ -77,9 +77,10 @@ the source. Results using genre/year features must disclose this limitation and
 should be compared with a dynamic-history-only baseline.
 
 `releaseYear` is the conservative terminal-title parse defined in Phase 2. It
-is not a release date. Missing static values remain missing rather than being
-filled from later data; an explicit missingness feature accompanies release
-year and age.
+is not a release date. The terminal token `(0000)` is missing because the
+Gregorian calendar and movie-age definition have no year zero. Missing static
+values remain missing rather than being filled from later data; an explicit
+missingness feature accompanies release year and age.
 
 ## 3. Accepted v1 features
 

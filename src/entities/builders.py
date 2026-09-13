@@ -122,6 +122,7 @@ def build_movies(movies: pd.DataFrame, links: pd.DataFrame) -> pd.DataFrame:
 
     result = movies[["movieId", "title", "genres"]].copy()
     parsed_year = result["title"].str.strip().str.extract(r"\((\d{4})\)$", expand=False)
+    parsed_year = parsed_year.mask(parsed_year.eq("0000"))
     result["releaseYear"] = pd.to_numeric(parsed_year, errors="coerce").astype("UInt16")
     result["genreStatus"] = pd.Series(
         np.where(result["genres"].eq(NO_GENRES_LISTED), "missing_in_source", "listed"),
@@ -176,6 +177,10 @@ def validate_movie_genres(
     _require_unique(movie_genres, ["movieId", "genreId"], "movie_genres")
     _require_unique(movies, ["movieId"], "movies")
     _require_unique(genres, ["genreId"], "genres")
+    if movie_genres["genreId"].str.contains("|", regex=False).any():
+        raise ValueError("movie_genres: genreId must be one normalized genre token")
+    if genres["genreId"].str.contains("|", regex=False).any():
+        raise ValueError("genres: genreId must be one normalized genre token")
     _validate_references(movie_genres["movieId"], movies["movieId"], "movie_genres", "movies")
     _validate_references(movie_genres["genreId"], genres["genreId"], "movie_genres", "genres")
 

@@ -101,6 +101,23 @@ def test_movie_entity_preserves_title_and_nullable_external_ids() -> None:
     assert movies.loc[movies["movieId"].eq(30), "genreStatus"].item() == "missing_in_source"
 
 
+def test_release_year_boundaries_and_year_zero_policy() -> None:
+    source = pd.DataFrame(
+        {
+            "movieId": pd.Series([1, 2, 3], dtype="uint32"),
+            "title": pd.Series(
+                ["Early (0001)", "Invalid (0000)", "Late (9999)"],
+                dtype="string",
+            ),
+            "genres": pd.Series(["Drama", "Drama", "Drama"], dtype="string"),
+        }
+    )
+    canonical = build_movies(source, source_links().iloc[:0])
+
+    assert canonical["releaseYear"].tolist() == [1, pd.NA, 9999]
+    assert str(canonical["releaseYear"].dtype) == "UInt16"
+
+
 def test_multi_genre_movie_produces_one_unique_bridge_row_per_genre() -> None:
     genres, bridge = build_genres_and_movie_genres(source_movies())
     movie_ten = bridge.loc[bridge["movieId"].eq(10)]
@@ -196,3 +213,24 @@ def test_movie_genre_bridge_rejects_duplicate_and_orphan_rows() -> None:
     orphan.loc[0, "genreId"] = "Unknown"
     with pytest.raises(ValueError, match="do not resolve to genres"):
         validate_movie_genres(orphan, source_movies()[["movieId"]], genres)
+
+
+def test_movie_genre_bridge_rejects_compound_genre_ids() -> None:
+    compound_bridge = pd.DataFrame(
+        {
+            "movieId": pd.Series([10], dtype="uint32"),
+            "genreId": pd.Series(["Drama|Action"], dtype="string"),
+        }
+    )
+    compound_genres = pd.DataFrame(
+        {
+            "genreId": pd.Series(["Drama|Action"], dtype="string"),
+            "genreName": pd.Series(["Drama|Action"], dtype="string"),
+        }
+    )
+    with pytest.raises(ValueError, match="one normalized genre token"):
+        validate_movie_genres(
+            compound_bridge,
+            source_movies()[["movieId"]],
+            compound_genres,
+        )

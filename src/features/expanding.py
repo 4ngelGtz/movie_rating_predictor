@@ -2,25 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import math
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import (
-    is_datetime64_any_dtype,
-    is_integer_dtype,
-    is_numeric_dtype,
-    is_string_dtype,
-)
+from pandas.api.types import is_datetime64_any_dtype, is_integer_dtype, is_numeric_dtype
 
 from src.data.schemas import RATING_VALUES
-from src.entities.builders import NO_GENRES_LISTED
+from src.features.catalog import build_catalog_lookups
 from src.state.moments import HistoricalRatingState, RunningMoments
 
 
 GLOBAL_MEAN_COLD_START = 3.5
 CONTEXT_COLUMNS = ("ratingEventId", "userId", "movieId", "timestamp")
-FEATURE_COLUMNS = (
+DYNAMIC_FEATURE_COLUMNS = (
     "global_rating_count",
     "global_mean_rating",
     "user_rating_count",
@@ -35,6 +31,13 @@ FEATURE_COLUMNS = (
     "user_target_genre_mean_rating",
     "user_target_genre_mean_delta",
 )
+STATIC_FEATURE_COLUMNS = (
+    "movie_genre_count",
+    "movie_release_year",
+    "movie_release_year_missing",
+    "movie_age_years",
+)
+FEATURE_COLUMNS = (*DYNAMIC_FEATURE_COLUMNS, *STATIC_FEATURE_COLUMNS)
 
 
 def _validate_rating_events(rating_events: pd.DataFrame) -> None:
@@ -58,42 +61,6 @@ def _validate_rating_events(rating_events: pd.DataFrame) -> None:
         raise TypeError("rating_events: timestamp must have a pandas datetime64 dtype")
     if timestamps.dt.tz is not None:
         raise ValueError("rating_events: timestamp must be timezone-naive")
-
-
-def _movie_genres_by_movie(
-    movie_genres: pd.DataFrame | None,
-) -> dict[int, tuple[str, ...]]:
-    """Validate and index the canonical Phase 2 movie-genre bridge."""
-    if movie_genres is None:
-        raise ValueError(
-            "movie_genres must be explicitly supplied when building Phase 4C features"
-        )
-    required = ["movieId", "genreId"]
-    if missing := set(required) - set(movie_genres.columns):
-        raise ValueError(f"movie_genres: missing required columns: {sorted(missing)}")
-    if movie_genres[required].isna().any().any():
-        raise ValueError("movie_genres: required columns must not contain missing values")
-    if not is_integer_dtype(movie_genres["movieId"].dtype):
-        raise TypeError("movie_genres: movieId must have an integer dtype")
-    if not is_string_dtype(movie_genres["genreId"].dtype):
-        raise TypeError("movie_genres: genreId must have a string dtype")
-    if movie_genres.duplicated(required).any():
-        raise ValueError("movie_genres: (movieId, genreId) must be unique")
-
-    genre_ids = movie_genres["genreId"]
-    if genre_ids.eq("").any():
-        raise ValueError("movie_genres: genreId must not be empty")
-    if genre_ids.str.strip().ne(genre_ids).any():
-        raise ValueError("movie_genres: genreId must not have surrounding whitespace")
-    if genre_ids.eq(NO_GENRES_LISTED).any():
-        raise ValueError("movie_genres: no-genres sentinel is not a genre entity")
-
-    result: dict[int, list[str]] = {}
-    for row in movie_genres[required].itertuples(index=False):
-        result.setdefault(int(row.movieId), []).append(str(row.genreId))
-    return {
-        movie_id: tuple(sorted(genres)) for movie_id, genres in result.items()
-    }
 
 
 def _resolved_features(
@@ -163,22 +130,50 @@ def _resolved_features(
     )
 
 
+def _movie_age_years(timestamp: pd.Timestamp, release_year: int) -> float:
+    """Return elapsed Gregorian years without pandas timestamp range limits."""
+    event_datetime = datetime(
+        timestamp.year,
+        timestamp.month,
+        timestamp.day,
+        timestamp.hour,
+        timestamp.minute,
+        timestamp.second,
+        timestamp.microsecond,
+    )
+    elapsed = event_datetime - datetime(release_year, 1, 1)
+    elapsed_seconds = (
+        elapsed.days * 86_400
+        + elapsed.seconds
+        + elapsed.microseconds / 1_000_000
+        + timestamp.nanosecond / 1_000_000_000
+    )
+    return elapsed_seconds / (365.2425 * 86_400)
+
+
 def build_expanding_rating_features(
     rating_events: pd.DataFrame,
     movie_genres: pd.DataFrame | None = None,
+    canonical_movies: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Build Phase 4A-C features at one row per canonical rating event.
+    """Build Phase 4A-D features at one row per canonical rating event.
 
     Events are ordered only by timestamp.  For each timestamp, every row is
     scored against the same pre-batch state; the complete batch is applied only
     after all its features have been emitted.  ``ratingEventId`` is copied as
     provenance and is never used for temporal ordering or tie-breaking.
     Output rows retain the physical input order for join convenience.
-    ``movie_genres`` must be supplied explicitly, including when the valid
-    canonical bridge is empty.
+    ``canonical_movies`` and ``movie_genres`` are one explicit, versioned
+    canonical catalog snapshot and must both be supplied, including when the
+    valid canonical bridge is empty.
     """
     _validate_rating_events(rating_events)
-    genres_by_movie = _movie_genres_by_movie(movie_genres)
+    catalog = build_catalog_lookups(
+        canonical_movies,
+        movie_genres,
+        required_movie_ids=rating_events["movieId"],
+    )
+    genres_by_movie = catalog.genres_by_movie
     event_count = len(rating_events)
     values: dict[str, np.ndarray] = {
         "global_rating_count": np.empty(event_count, dtype=np.uint64),
@@ -194,8 +189,13 @@ def build_expanding_rating_features(
         "user_target_genre_rating_count": np.empty(event_count, dtype=np.uint64),
         "user_target_genre_mean_rating": np.empty(event_count, dtype=np.float32),
         "user_target_genre_mean_delta": np.empty(event_count, dtype=np.float32),
+        "movie_genre_count": np.empty(event_count, dtype=np.uint8),
+        "movie_release_year": np.empty(event_count, dtype=np.float64),
+        "movie_release_year_missing": np.empty(event_count, dtype=np.bool_),
+        "movie_age_years": np.empty(event_count, dtype=np.float32),
     }
     if event_count == 0:
+        values["movie_release_year"] = pd.array([], dtype="Int16")
         return pd.concat(
             [
                 rating_events.loc[:, CONTEXT_COLUMNS].reset_index(drop=True),
@@ -203,6 +203,26 @@ def build_expanding_rating_features(
             ],
             axis=1,
         )
+
+    # Resolve every static value before dynamic state exists. Besides keeping
+    # catalog failures atomic, this makes static work independent of batch order.
+    for position, row in enumerate(
+        rating_events[["movieId", "timestamp"]].itertuples(index=False)
+    ):
+        movie_id = int(row.movieId)
+        release_year = catalog.release_year_by_movie[movie_id]
+        values["movie_genre_count"][position] = len(
+            genres_by_movie.get(movie_id, ())
+        )
+        values["movie_release_year_missing"][position] = release_year is None
+        if release_year is None:
+            values["movie_release_year"][position] = np.nan
+            values["movie_age_years"][position] = np.nan
+        else:
+            values["movie_release_year"][position] = release_year
+            values["movie_age_years"][position] = _movie_age_years(
+                pd.Timestamp(row.timestamp), release_year
+            )
 
     work = rating_events.loc[:, (*CONTEXT_COLUMNS, "rating")].copy()
     work["inputPosition"] = np.arange(event_count)
@@ -220,7 +240,7 @@ def build_expanding_rating_features(
                 timestamp,
                 genres_by_movie,
             )
-            for column, value in zip(FEATURE_COLUMNS, resolved, strict=True):
+            for column, value in zip(DYNAMIC_FEATURE_COLUMNS, resolved, strict=True):
                 values[column][position] = value
 
         state.apply_timestamp_batch(
@@ -232,6 +252,7 @@ def build_expanding_rating_features(
             movie_genres=genres_by_movie,
         )
 
+    values["movie_release_year"] = pd.array(values["movie_release_year"], dtype="Int16")
     return pd.concat(
         [
             rating_events.loc[:, CONTEXT_COLUMNS].reset_index(drop=True),

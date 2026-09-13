@@ -115,6 +115,20 @@ resolved into association support, an association-weighted historical mean,
 and its delta from the user's historical mean using the same strict pre-batch
 snapshot.
 
+## Phase 4D: Static catalog and event context
+
+Phase 4D resolves target-movie genre count, canonical release year, explicit
+release-year missingness, and age at the scored event timestamp from one
+explicit canonical `movies` plus `movie_genre` snapshot. The builder validates
+and indexes that frozen catalog once, so static resolution cannot duplicate or
+drop canonical rating events and does not alter the timestamp-batch lifecycle.
+`src/features/catalog.py` also provides an order-invariant SHA-256 content
+identity covering both canonical tables. Persisting and enforcing that identity
+on feature outputs and checkpoints remains Phase 4E work.
+
+> A feature row is produced using one explicit, versioned canonical catalog
+> snapshot.
+
 ## Current notebooks
 
 > **Exploratory analysis only:** temporal calculations in the notebooks do not

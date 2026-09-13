@@ -69,7 +69,7 @@ user 1 ─── N rating_event N ─── 1 movie
 | Entity       | Primary key     | One-row-per grain                                                               | Sources           | Attributes and time semantics                                                                                                                                                                                                                                                                                                                     |
 | ------------ | --------------- | ------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | User         | `userId`        | MovieLens user observed in ratings or tags                                      | `ratings`, `tags` | There are no truly static user attributes. `firstObservedTimestamp` is the earliest rating or tag time, and nullable `firstRatingTimestamp` is the earliest rating time. Both are lifecycle metadata derived from the extract and must not be attached to earlier observations as predictors.                                                     |
-| Movie        | `movieId`       | MovieLens catalog movie                                                         | `movies`, `links` | `title` is preserved verbatim. Nullable `releaseYear` is conservatively parsed only from a terminal `(YYYY)` after ignoring outer whitespace. `imdbId` and `tmdbId` use nullable types; neither is the canonical key. `genreStatus` is `listed` or `missing_in_source`. These undated catalog values are only provisionally static under Phase 1. |
+| Movie        | `movieId`       | MovieLens catalog movie                                                         | `movies`, `links` | `title` is preserved verbatim. Nullable `releaseYear` is conservatively parsed only from a terminal `(YYYY)` after ignoring outer whitespace; `(0000)` is missing because the Gregorian calendar and movie-age definition have no year zero. `imdbId` and `tmdbId` use nullable types; neither is the canonical key. `genreStatus` is `listed` or `missing_in_source`. These undated catalog values are only provisionally static under Phase 1. |
 | Genre        | `genreId`       | Exact canonical MovieLens genre label                                           | `movies`          | `genreName` equals the already-normalized source token. Labels are not case-folded, slugged, or otherwise merged. `(no genres listed)` is not a genre entity.                                                                                                                                                                                     |
 | Director     | `directorId`    | Externally identified person with a director credit                             | not available     | No current table contains directors or stable person IDs. Names must not be used as invented identifiers. Future cached enrichment must supply a stable, source-qualified person ID.                                                                                                                                                              |
 | Actor        | `actorId`       | Externally identified person with a cast credit                                 | not available     | Same identity constraint as directors. A person may appear in any number of movies.                                                                                                                                                                                                                                                               |
@@ -195,9 +195,10 @@ timestamp exclusion;
 ## Source limitations and assumptions
 
 - The catalog, links, and genome tables have no availability timestamp. Their
-historical use still needs the temporal justification required by Phase 1.
+  historical use still needs the temporal justification required by Phase 1.
 - Release year is embedded in most titles, not supplied as a dedicated field;
-parsing is conservative and missing when the pattern is ambiguous.
+  parsing is conservative and missing when the pattern is ambiguous or is
+  `(0000)`, which is not a valid Gregorian calendar year.
 - `(no genres listed)` distinguishes explicit missing genre metadata from a
 real genre but cannot tell whether the movie truly has no genres.
 - Genre lists reject empty tokens and reject the no-genres sentinel when it is
@@ -211,4 +212,3 @@ source has no separate arrival timestamp.
 - All 7,801 current tag users are also rating users, although 110 have a tag
 earlier than their first rating. User lifecycle metadata therefore considers
 both timestamp-bearing event tables.
-

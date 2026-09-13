@@ -3,7 +3,7 @@ import pandas as pd
 import pandas.testing as pdt
 import pytest
 
-from src.features.expanding import build_expanding_rating_features
+from tests.features.catalog_fixtures import build_features as build_expanding_rating_features
 
 
 T = pd.Timestamp("2020-01-01 10:00:00")
