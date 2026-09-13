@@ -10,7 +10,7 @@ import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype, is_integer_dtype, is_numeric_dtype
 
 from src.data.schemas import RATING_VALUES
-from src.features.catalog import build_catalog_lookups
+from src.features.catalog import CatalogLookups, build_catalog_lookups
 from src.state.moments import (
     HistoricalRatingState,
     RunningMoments,
@@ -154,6 +154,85 @@ def _movie_age_years(timestamp: pd.Timestamp, release_year: int) -> float:
     return elapsed_seconds / (365.2425 * 86_400)
 
 
+def _resolved_static_features(
+    movie_id: int,
+    prediction_timestamp: pd.Timestamp,
+    catalog: CatalogLookups,
+) -> tuple[int, int | None, bool, float]:
+    release_year = catalog.release_year_by_movie[movie_id]
+    return (
+        len(catalog.genres_by_movie.get(movie_id, ())),
+        release_year,
+        release_year is None,
+        (
+            np.nan
+            if release_year is None
+            else _movie_age_years(prediction_timestamp, release_year)
+        ),
+    )
+
+
+def _empty_feature_values(event_count: int) -> dict[str, np.ndarray]:
+    return {
+        "global_rating_count": np.empty(event_count, dtype=np.uint64),
+        "global_mean_rating": np.empty(event_count, dtype=np.float32),
+        "user_rating_count": np.empty(event_count, dtype=np.uint64),
+        "user_mean_rating": np.empty(event_count, dtype=np.float32),
+        "user_rating_std_pop": np.empty(event_count, dtype=np.float32),
+        "user_seconds_since_last_rating": np.empty(event_count, dtype=np.float64),
+        "movie_rating_count": np.empty(event_count, dtype=np.uint64),
+        "movie_mean_rating": np.empty(event_count, dtype=np.float32),
+        "movie_rating_std_pop": np.empty(event_count, dtype=np.float32),
+        "movie_rating_count_30d": np.empty(event_count, dtype=np.uint64),
+        "user_target_genre_rating_count": np.empty(event_count, dtype=np.uint64),
+        "user_target_genre_mean_rating": np.empty(event_count, dtype=np.float32),
+        "user_target_genre_mean_delta": np.empty(event_count, dtype=np.float32),
+        "movie_genre_count": np.empty(event_count, dtype=np.uint8),
+        "movie_release_year": np.empty(event_count, dtype=np.float64),
+        "movie_release_year_missing": np.empty(event_count, dtype=np.bool_),
+        "movie_age_years": np.empty(event_count, dtype=np.float32),
+    }
+
+
+def _feature_frame(
+    context: pd.DataFrame, values: dict[str, np.ndarray]
+) -> pd.DataFrame:
+    values["movie_release_year"] = pd.array(
+        values["movie_release_year"], dtype="Int16"
+    )
+    return pd.concat(
+        [context.loc[:, CONTEXT_COLUMNS].reset_index(drop=True), pd.DataFrame(values)],
+        axis=1,
+    )
+
+
+def _resolve_timestamp_batch_features(
+    state: HistoricalRatingState,
+    batch_events: pd.DataFrame,
+    catalog: CatalogLookups,
+) -> pd.DataFrame:
+    """Resolve one complete timestamp batch from one immutable pre-batch state."""
+    event_count = len(batch_events)
+    values = _empty_feature_values(event_count)
+    for position, row in enumerate(
+        batch_events.loc[:, CONTEXT_COLUMNS].itertuples(index=False)
+    ):
+        timestamp = pd.Timestamp(row.timestamp)
+        dynamic = _resolved_features(
+            state,
+            int(row.userId),
+            int(row.movieId),
+            timestamp,
+            catalog.genres_by_movie,
+        )
+        static = _resolved_static_features(int(row.movieId), timestamp, catalog)
+        for column, value in zip(DYNAMIC_FEATURE_COLUMNS, dynamic, strict=True):
+            values[column][position] = value
+        for column, value in zip(STATIC_FEATURE_COLUMNS, static, strict=True):
+            values[column][position] = value
+    return _feature_frame(batch_events, values)
+
+
 def build_expanding_rating_features(
     rating_events: pd.DataFrame,
     movie_genres: pd.DataFrame | None = None,
@@ -178,34 +257,9 @@ def build_expanding_rating_features(
     )
     genres_by_movie = catalog.genres_by_movie
     event_count = len(rating_events)
-    values: dict[str, np.ndarray] = {
-        "global_rating_count": np.empty(event_count, dtype=np.uint64),
-        "global_mean_rating": np.empty(event_count, dtype=np.float32),
-        "user_rating_count": np.empty(event_count, dtype=np.uint64),
-        "user_mean_rating": np.empty(event_count, dtype=np.float32),
-        "user_rating_std_pop": np.empty(event_count, dtype=np.float32),
-        "user_seconds_since_last_rating": np.empty(event_count, dtype=np.float64),
-        "movie_rating_count": np.empty(event_count, dtype=np.uint64),
-        "movie_mean_rating": np.empty(event_count, dtype=np.float32),
-        "movie_rating_std_pop": np.empty(event_count, dtype=np.float32),
-        "movie_rating_count_30d": np.empty(event_count, dtype=np.uint64),
-        "user_target_genre_rating_count": np.empty(event_count, dtype=np.uint64),
-        "user_target_genre_mean_rating": np.empty(event_count, dtype=np.float32),
-        "user_target_genre_mean_delta": np.empty(event_count, dtype=np.float32),
-        "movie_genre_count": np.empty(event_count, dtype=np.uint8),
-        "movie_release_year": np.empty(event_count, dtype=np.float64),
-        "movie_release_year_missing": np.empty(event_count, dtype=np.bool_),
-        "movie_age_years": np.empty(event_count, dtype=np.float32),
-    }
+    values = _empty_feature_values(event_count)
     if event_count == 0:
-        values["movie_release_year"] = pd.array([], dtype="Int16")
-        return pd.concat(
-            [
-                rating_events.loc[:, CONTEXT_COLUMNS].reset_index(drop=True),
-                pd.DataFrame(values),
-            ],
-            axis=1,
-        )
+        return _feature_frame(rating_events, values)
 
     # Resolve every static value before dynamic state exists. Besides keeping
     # catalog failures atomic, this makes static work independent of batch order.
@@ -213,19 +267,11 @@ def build_expanding_rating_features(
         rating_events[["movieId", "timestamp"]].itertuples(index=False)
     ):
         movie_id = int(row.movieId)
-        release_year = catalog.release_year_by_movie[movie_id]
-        values["movie_genre_count"][position] = len(
-            genres_by_movie.get(movie_id, ())
+        resolved = _resolved_static_features(
+            movie_id, pd.Timestamp(row.timestamp), catalog
         )
-        values["movie_release_year_missing"][position] = release_year is None
-        if release_year is None:
-            values["movie_release_year"][position] = np.nan
-            values["movie_age_years"][position] = np.nan
-        else:
-            values["movie_release_year"][position] = release_year
-            values["movie_age_years"][position] = _movie_age_years(
-                pd.Timestamp(row.timestamp), release_year
-            )
+        for column, value in zip(STATIC_FEATURE_COLUMNS, resolved, strict=True):
+            values[column][position] = value
 
     work = rating_events.loc[:, (*CONTEXT_COLUMNS, "rating")].copy()
     work["inputPosition"] = np.arange(event_count)
@@ -255,11 +301,4 @@ def build_expanding_rating_features(
             movie_genres=genres_by_movie,
         )
 
-    values["movie_release_year"] = pd.array(values["movie_release_year"], dtype="Int16")
-    return pd.concat(
-        [
-            rating_events.loc[:, CONTEXT_COLUMNS].reset_index(drop=True),
-            pd.DataFrame(values),
-        ],
-        axis=1,
-    )
+    return _feature_frame(rating_events, values)

@@ -84,9 +84,7 @@ at `c`. Every update requires the explicit movie-genre bridge. Bare state and
 the low-level mutable update API cannot establish checkpoint eligibility.
 Trusted source validation reuses the canonical MovieLens rating domain:
 `0.5, 1.0, ..., 5.0`.
-Phase 4E-1 validates persisted provenance format and internal consistency;
-matching a restored checkpoint's identities against the actual canonical
-sources remains Phase 4E-2 resume/replay work.
+Phase 4E-1 validates persisted provenance format and internal consistency.
 
 The state records the rolling expiration watermark and cumulative number of
 expired canonical events. At publication the watermark equals `c`, and expired
@@ -98,23 +96,56 @@ returning mutable state. Persisted timestamps use exactly
 File publication uses same-directory temporary files and atomic replacement.
 
 Legacy raw Phase 4A-C state payloads remain distinct from checkpoint artifacts.
-Replay, idempotency, runtime catalog matching, and materialization remain later
+
+#### 4E-2 — Resume/replay, provenance enforcement, duplicates — COMPLETE
+
+`CheckpointHistorySession.resume_from_checkpoint` rebuilds the canonical
+timestamp batches and verifies the complete `historySourceId`, event count,
+exclusive-cutoff batch cursor, prefix event count, and latest applied timestamp
+before restored state becomes session-owned. It independently rebuilds the
+Phase 4D catalog digest and lookups and requires an exact `catalogSnapshotId`
+match before replay.
+
+Replay consumes only the original contiguous source suffix beginning at
+`checkpointCutoff`, retains complete timestamp batches, and uses the same
+trusted Phase 4A-C update path and validated genre bridge. Canonical
+`ratingEventId` values are retained on source-bound batches. The session tracks
+the applied prefix and rejects retries, overlaps, skipped ranges, foreign
+batches, and duplicate event IDs before applying a replay range. Rolling
+activity is expired to each batch timestamp before that batch is applied, so
+the retained interval remains exactly `[t - 30 days, t)`.
+
+The validated Phase 4D catalog is owned by a resumed session. Its ordinary
+processing methods use that catalog when no bridge argument is supplied and
+reject any attempted override. All processing paths share one transactional
+batch primitive: validate the source, order, duplicate status, and catalog
+inputs; prepare expiration, feature reads, and the complete update on an
+independent state copy; then commit state, cursor, counts, and applied IDs.
+Failures leave every session component unchanged.
+
+Multi-batch `replay_batches()` and `replay_remaining()` extend that guarantee to
+the entire public call. They replay the validated range on an isolated session
+copy and publish its final state and provenance only after every batch succeeds.
+An error in any later batch discards all progress prepared by that range call.
+
+`replay_next_batch_features()` resolves one row per canonical event with all 17
+Phase 4A-D predictors from the shared pre-batch `H(t)`, applies the complete
+timestamp batch only after every row is resolved, and advances the session.
+It returns the in-memory rows for immediate equivalence testing; persisted and
+full-source feature materialization remain later work.
+
+Full feature materialization and dataset-level replay equivalence remain later
 4E substeps.
 
 Remaining Phase 4E work must deliver:
 
-1. Replay of complete batches in `[checkpointCutoff, t)`, scoring every event in
-   a tied batch before applying that batch.
-2. Duplicate-application protection at the canonical event/provenance grain,
-   including relationship-state keys where one event has multiple legitimate
-   updates.
-3. Enforcement of the persisted `catalog_snapshot_id` during replay and on
-   feature outputs.
-4. Tests proving uninterrupted and checkpoint/restored replay produce equivalent
+1. Enforcement of the persisted `catalog_snapshot_id` on feature outputs.
+2. Tests proving uninterrupted and checkpoint/restored replay produce equivalent
    features.
-5. Event-conservation checks through replay and multi-valued genre expansion.
-6. Full materialization of the 17-feature dataset from canonical Parquet inputs.
-7. Provenance metadata sufficient to reproduce the materialized dataset,
+3. Event-conservation checks through full materialization and multi-valued genre
+   expansion.
+4. Full materialization of the 17-feature dataset from canonical Parquet inputs.
+5. Provenance metadata sufficient to reproduce the materialized dataset,
    including the source snapshot, catalog identity, feature contract version,
    and temporal cutoff semantics.
 

@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 import numpy as np
 import pandas as pd
@@ -28,6 +28,12 @@ from pandas.api.types import (
 )
 
 from src.data.schemas import RATING_VALUES
+from src.features.catalog import (
+    CatalogLookups,
+    build_catalog_lookups,
+    catalog_snapshot_id,
+)
+from src.features.expanding import _resolve_timestamp_batch_features
 from src.state.moments import (
     HistoricalRatingState,
     MAX_ENTITY_ID,
@@ -115,6 +121,7 @@ class CanonicalTimestampBatch:
     ordinal: int
     timestamp: pd.Timestamp
     ratings: tuple[tuple[int, int, float], ...]
+    rating_event_ids: tuple[int, ...]
 
     def __init__(
         self,
@@ -122,6 +129,7 @@ class CanonicalTimestampBatch:
         ordinal: int,
         timestamp: pd.Timestamp,
         ratings: tuple[tuple[int, int, float], ...],
+        rating_event_ids: tuple[int, ...] = (),
         *,
         _token: object,
     ) -> None:
@@ -131,6 +139,7 @@ class CanonicalTimestampBatch:
         object.__setattr__(self, "ordinal", ordinal)
         object.__setattr__(self, "timestamp", timestamp)
         object.__setattr__(self, "ratings", ratings)
+        object.__setattr__(self, "rating_event_ids", rating_event_ids)
 
 
 def _canonical_batches_and_source_id(
@@ -210,16 +219,36 @@ def _canonical_batches_and_source_id(
                 index=False
             )
         )
+        batch_event_ids = tuple(int(value) for value in group["ratingEventId"])
         batches.append(
             CanonicalTimestampBatch(
                 history_source_id=source_id,
                 ordinal=ordinal,
                 timestamp=pd.Timestamp(timestamp),
                 ratings=batch_ratings,
+                rating_event_ids=batch_event_ids,
                 _token=_CANONICAL_BATCH_TOKEN,
             )
         )
     return tuple(batches), source_id
+
+
+def _batch_event_frame(batch: CanonicalTimestampBatch) -> pd.DataFrame:
+    """Reconstruct one canonical batch at event grain for feature resolution."""
+    return pd.DataFrame(
+        {
+            "ratingEventId": pd.Series(batch.rating_event_ids, dtype="UInt64"),
+            "userId": pd.Series(
+                (rating[0] for rating in batch.ratings), dtype="uint32"
+            ),
+            "movieId": pd.Series(
+                (rating[1] for rating in batch.ratings), dtype="uint32"
+            ),
+            "timestamp": pd.Series(
+                [batch.timestamp] * len(batch.ratings), dtype="datetime64[ns]"
+            ),
+        }
+    )
 
 
 def _validate_checkpoint_state(
@@ -506,6 +535,9 @@ class CheckpointHistorySession:
     _state: HistoricalRatingState
     _cursor: int = 0
     _processed_event_count: int = 0
+    _applied_event_ids: set[int]
+    _catalog: CatalogLookups | None
+    _catalog_snapshot_id: str | None
 
     def __init__(
         self,
@@ -527,6 +559,9 @@ class CheckpointHistorySession:
         )
         self._cursor = 0
         self._processed_event_count = 0
+        self._applied_event_ids = set()
+        self._catalog = None
+        self._catalog_snapshot_id = None
 
     @classmethod
     def from_canonical_events(
@@ -551,6 +586,86 @@ class CheckpointHistorySession:
             _token=_HISTORY_SESSION_TOKEN,
         )
 
+    @classmethod
+    def resume_from_checkpoint(
+        cls,
+        *,
+        checkpoint: Checkpoint,
+        rating_events: pd.DataFrame,
+        canonical_movies: pd.DataFrame,
+        movie_genres: pd.DataFrame,
+    ) -> CheckpointHistorySession:
+        """Restore a checkpoint against its exact history and catalog sources.
+
+        All source, catalog, cutoff, and progress checks finish before the new
+        session takes ownership of mutable restored state.
+        """
+        if not isinstance(checkpoint, Checkpoint):
+            raise TypeError("checkpoint must be a validated Checkpoint")
+
+        metadata = checkpoint.metadata
+        batches, source_id = _canonical_batches_and_source_id(rating_events)
+        if source_id != metadata.history_source_id:
+            raise ValueError(
+                "canonical rating history does not match checkpoint historySourceId"
+            )
+
+        actual_catalog_id = catalog_snapshot_id(canonical_movies, movie_genres)
+        if actual_catalog_id != metadata.catalog_snapshot_id:
+            raise ValueError(
+                "canonical catalog does not match checkpoint catalogSnapshotId"
+            )
+        catalog = build_catalog_lookups(
+            canonical_movies,
+            movie_genres,
+            required_movie_ids=rating_events["movieId"],
+        )
+
+        _, restored_state = checkpoint.restore()
+
+        timestamps = tuple(batch.timestamp for batch in batches)
+        required_cursor = bisect_left(timestamps, metadata.checkpoint_cutoff)
+        expected_event_count = sum(
+            len(batch.rating_event_ids) for batch in batches[:required_cursor]
+        )
+        if metadata.history_event_count != len(rating_events):
+            raise ValueError(
+                "checkpoint historyEventCount does not match canonical history"
+            )
+        if metadata.processed_batch_count != required_cursor:
+            raise ValueError(
+                "checkpoint processedBatchCount does not match its exclusive cutoff"
+            )
+        if metadata.processed_event_count != expected_event_count:
+            raise ValueError(
+                "checkpoint processedEventCount does not match its canonical prefix"
+            )
+        expected_latest = (
+            batches[required_cursor - 1].timestamp if required_cursor else None
+        )
+        if restored_state.latest_applied_timestamp != expected_latest:
+            raise ValueError(
+                "checkpoint state timestamp does not match its canonical prefix"
+            )
+
+        session = cls(
+            batches=batches,
+            history_source_id=source_id,
+            history_event_count=len(rating_events),
+            _token=_HISTORY_SESSION_TOKEN,
+        )
+        session._state = restored_state
+        session._cursor = required_cursor
+        session._processed_event_count = expected_event_count
+        session._applied_event_ids = {
+            event_id
+            for batch in batches[:required_cursor]
+            for event_id in batch.rating_event_ids
+        }
+        session._catalog = catalog
+        session._catalog_snapshot_id = actual_catalog_id
+        return session
+
     @property
     def history_source_id(self) -> str:
         return self._history_source_id
@@ -568,12 +683,19 @@ class CheckpointHistorySession:
     def processed_event_count(self) -> int:
         return self._processed_event_count
 
+    @property
+    def applied_event_ids(self) -> frozenset[int]:
+        """Return immutable canonical event provenance for the applied prefix."""
+        return frozenset(self._applied_event_ids)
+
     def snapshot_state(self) -> HistoricalRatingState:
         """Return an independent state copy without surrendering session ownership."""
         return HistoricalRatingState.from_dict(self._state.to_dict())
 
     def process_next_batch(
-        self, *, movie_genres: Mapping[int, tuple[str, ...]]
+        self,
+        *,
+        movie_genres: Mapping[int, tuple[str, ...]] | None = None,
     ) -> CanonicalTimestampBatch:
         """Consume exactly the next complete timestamp group."""
         if self._cursor >= len(self._batches):
@@ -586,9 +708,24 @@ class CheckpointHistorySession:
         self,
         batch: CanonicalTimestampBatch,
         *,
-        movie_genres: Mapping[int, tuple[str, ...]],
+        movie_genres: Mapping[int, tuple[str, ...]] | None = None,
     ) -> CanonicalTimestampBatch:
-        """Consume a source batch only when it is exactly the next prefix batch."""
+        """Consume the next source batch atomically with the session catalog."""
+        consumed, _ = self._consume_batch(
+            batch,
+            movie_genres=movie_genres,
+            emit_features=False,
+        )
+        return consumed
+
+    def _consume_batch(
+        self,
+        batch: CanonicalTimestampBatch,
+        *,
+        movie_genres: Mapping[int, tuple[str, ...]] | None,
+        emit_features: bool,
+    ) -> tuple[CanonicalTimestampBatch, pd.DataFrame | None]:
+        """Validate, prepare on a copy, then atomically commit one batch."""
         if not isinstance(batch, CanonicalTimestampBatch):
             raise TypeError("batch must come from a canonical-history session")
         if batch.history_source_id != self._history_source_id:
@@ -601,15 +738,128 @@ class CheckpointHistorySession:
                 f"canonical batches must be consumed in order; expected ordinal "
                 f"{self._cursor}"
             )
-        self._state._apply_trusted_timestamp_batch(
+        duplicate_ids = self._applied_event_ids.intersection(batch.rating_event_ids)
+        if duplicate_ids:
+            raise ValueError(
+                "canonical batch contains already-applied ratingEventId values"
+            )
+
+        if self._catalog is not None:
+            if movie_genres is not None:
+                raise ValueError(
+                    "a resumed session uses its bound canonical catalog; "
+                    "movie_genres cannot be overridden"
+                )
+            resolved_genres = self._catalog.genres_by_movie
+        else:
+            if movie_genres is None:
+                raise ValueError(
+                    "new history sessions require an explicit movie_genres bridge"
+                )
+            resolved_genres = movie_genres
+        if emit_features and self._catalog is None:
+            raise ValueError(
+                "replay-time features require a session restored with a catalog"
+            )
+
+        prepared_state = HistoricalRatingState.from_dict(self._state.to_dict())
+        prepared_state.expire_movie_activity(batch.timestamp)
+        features = (
+            _resolve_timestamp_batch_features(
+                prepared_state,
+                _batch_event_frame(batch),
+                self._catalog,
+            )
+            if emit_features and self._catalog is not None
+            else None
+        )
+        prepared_state._apply_trusted_timestamp_batch(
             batch.ratings,
             timestamp=batch.timestamp,
-            movie_genres=movie_genres,
+            movie_genres=resolved_genres,
             _token=_TRUSTED_HISTORY_TOKEN,
         )
+
+        self._state = prepared_state
         self._cursor += 1
         self._processed_event_count += len(batch.ratings)
-        return batch
+        self._applied_event_ids.update(batch.rating_event_ids)
+        return batch, features
+
+    def replay_batch(self, batch: CanonicalTimestampBatch) -> CanonicalTimestampBatch:
+        """Replay exactly the next source batch using the validated catalog."""
+        if self._catalog is None:
+            raise ValueError("replay requires a session restored from a checkpoint")
+        consumed, _ = self._consume_batch(
+            batch, movie_genres=None, emit_features=False
+        )
+        return consumed
+
+    def replay_next_batch(self) -> CanonicalTimestampBatch:
+        """Replay the next complete timestamp batch at or after the cutoff."""
+        if self._cursor >= len(self._batches):
+            raise ValueError("canonical history has no unprocessed timestamp batch")
+        return self.replay_batch(self._batches[self._cursor])
+
+    def replay_next_batch_features(self) -> pd.DataFrame:
+        """Emit all 17 pre-batch features, then atomically apply the next batch."""
+        if self._catalog is None:
+            raise ValueError("replay requires a session restored from a checkpoint")
+        if self._cursor >= len(self._batches):
+            raise ValueError("canonical history has no unprocessed timestamp batch")
+        _, features = self._consume_batch(
+            self._batches[self._cursor],
+            movie_genres=None,
+            emit_features=True,
+        )
+        assert features is not None
+        return features
+
+    def replay_batches(
+        self, batches: Iterable[CanonicalTimestampBatch]
+    ) -> tuple[CanonicalTimestampBatch, ...]:
+        """Replay one contiguous range as a single atomic session transaction."""
+        if self._catalog is None:
+            raise ValueError("replay requires a session restored from a checkpoint")
+        candidates = tuple(batches)
+        expected = self._batches[self._cursor : self._cursor + len(candidates)]
+        if candidates != expected:
+            raise ValueError(
+                "replay batches must be the next contiguous canonical source range"
+            )
+        candidate_ids = tuple(
+            event_id
+            for batch in candidates
+            for event_id in batch.rating_event_ids
+        )
+        if len(candidate_ids) != len(set(candidate_ids)):
+            raise ValueError("replay range contains duplicate ratingEventId values")
+        if self._applied_event_ids.intersection(candidate_ids):
+            raise ValueError("replay range contains already-applied ratingEventId values")
+
+        working = CheckpointHistorySession(
+            batches=self._batches,
+            history_source_id=self._history_source_id,
+            history_event_count=self._history_event_count,
+            _token=_HISTORY_SESSION_TOKEN,
+        )
+        working._state = HistoricalRatingState.from_dict(self._state.to_dict())
+        working._cursor = self._cursor
+        working._processed_event_count = self._processed_event_count
+        working._applied_event_ids = set(self._applied_event_ids)
+        working._catalog = self._catalog
+        working._catalog_snapshot_id = self._catalog_snapshot_id
+
+        consumed = tuple(working.replay_batch(batch) for batch in candidates)
+        self._state = working._state
+        self._cursor = working._cursor
+        self._processed_event_count = working._processed_event_count
+        self._applied_event_ids = working._applied_event_ids
+        return consumed
+
+    def replay_remaining(self) -> tuple[CanonicalTimestampBatch, ...]:
+        """Replay the complete canonical suffix from the checkpoint cutoff."""
+        return self.replay_batches(self._batches[self._cursor :])
 
     def checkpoint(
         self,
@@ -619,6 +869,14 @@ class CheckpointHistorySession:
     ) -> Checkpoint:
         """Publish only when progress is exactly the source prefix before cutoff."""
         cutoff = _checkpoint_cutoff_value(checkpoint_cutoff)
+        snapshot_id = _catalog_snapshot_id(catalog_snapshot_id)
+        if (
+            self._catalog_snapshot_id is not None
+            and snapshot_id != self._catalog_snapshot_id
+        ):
+            raise ValueError(
+                "catalogSnapshotId does not match the catalog bound to this session"
+            )
         timestamps = tuple(batch.timestamp for batch in self._batches)
         required_cursor = bisect_left(timestamps, cutoff)
         if self._cursor < required_cursor:
@@ -647,7 +905,7 @@ class CheckpointHistorySession:
         return Checkpoint._from_history_session(
             state=self._state,
             checkpoint_cutoff=cutoff,
-            catalog_snapshot_id=catalog_snapshot_id,
+            catalog_snapshot_id=snapshot_id,
             history_source_id=self._history_source_id,
             history_event_count=self._history_event_count,
             processed_batch_count=self._cursor,

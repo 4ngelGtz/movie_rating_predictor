@@ -146,12 +146,13 @@ and indexes that frozen catalog once, so static resolution cannot duplicate or
 drop canonical rating events and does not alter the timestamp-batch lifecycle.
 `src/features/catalog.py` also provides an order-invariant SHA-256
 `catalog_snapshot_id` covering both canonical tables. Deterministic content
-identity is therefore available and persisted in Phase 4E-1 checkpoints;
-runtime and feature-output enforcement remains later Phase 4E work.
+identity is therefore available and persisted in Phase 4E-1 checkpoints.
+Phase 4E-2 recomputes and enforces it before resume; feature-output provenance
+remains later Phase 4E work.
 
 > A feature row is produced using one explicit frozen canonical catalog
 > snapshot. At present, “versioned” means its content can be identified
-> deterministically; runtime version enforcement remains Phase 4E work.
+> deterministically; resume-time enforcement is implemented in Phase 4E-2.
 
 ## Phase 4E: Checkpoint/replay and full materialization
 
@@ -172,20 +173,34 @@ requires an explicit movie-genre bridge; bare state and low-level/manual updates
 cannot establish checkpoint eligibility. Checkpoints carry the history source
 SHA-256 plus total and processed progress counts. Trusted source validation
 accepts only MovieLens half-star ratings from `0.5` through `5.0`.
-Phase 4E-1 validates the format and internal consistency of that persisted
-provenance; Phase 4E-2 will compare it with the actual canonical source during
-resume and replay.
+Phase 4E-2 validates that persisted provenance against the actual complete
+canonical history and catalog before restored state becomes mutable session
+state. Replay then consumes only contiguous source-bound timestamp batches at
+or after the exclusive cutoff. The session retains canonical `ratingEventId`
+membership for each batch and rejects retries, overlaps, skipped ranges, and
+foreign or duplicated events before applying them. A resumed session owns its
+validated catalog and rejects caller attempts to replace its genre bridge.
+
+Every processing API uses one transactional batch lifecycle. It prepares
+rolling expiration and the complete update on an independent state copy, then
+commits state and provenance together, so rejected operations cannot partially
+expire or update live state. `replay_next_batch_features()` uses that lifecycle
+to emit the complete 17-feature Phase 4A-D rows from one shared pre-batch
+snapshot before applying the timestamp batch. These rows remain in memory;
+full materialization belongs to later Phase 4E work.
+
+Range replay is atomic at the public-call boundary as well. `replay_batches()`
+and `replay_remaining()` prepare every batch on an isolated session copy and
+publish progress only when the full range succeeds.
 
 A rolling expiration watermark plus expired-event count prevents publication
 after over-expiration and detects missing retained activity. Persisted
 timestamps have the exact naïve form
 `YYYY-MM-DDTHH:MM:SS.fffffffff`.
 
-Later Phase 4E work will replay complete timestamp batches with
-duplicate-application protection, enforce catalog identity against supplied
-runtime inputs, prove uninterrupted/replay equivalence and event conservation,
-and materialize all 17 v1 predictors from canonical Parquet inputs with
-reproducible provenance metadata.
+Later Phase 4E work will prove the broader dataset-level uninterrupted/replay
+equivalence and event conservation matrix and materialize all 17 v1 predictors
+from canonical Parquet inputs with reproducible provenance metadata.
 
 It does not add new predictors or external enrichment, and it does not include
 modeling, final temporal splits, serving APIs, or feature-store infrastructure.
