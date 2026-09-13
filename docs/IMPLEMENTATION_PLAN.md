@@ -190,6 +190,17 @@ tags/genome features, embeddings, collaborative filtering, model training,
 hyperparameter optimization, the final temporal modeling pipeline, FastAPI,
 feature-store infrastructure, or deployment work.
 
+Phase 4E-4 operational hardening — deferred
+
+Non-blocking follow-ups:
+1. Preserve previous metadata backup under persistent second-stage publication failure.
+2. Enforce exact ratingEventId set equality in production materialization.
+3. Bind metadata to the generated Parquet via output SHA-256.
+4. Validate context-column dtypes explicitly.
+5. Optionally add golden provenance digest regressions.
+
+These issues do not affect the correctness of the current 20,000,263-row materialized feature dataset and are deferred until the pipeline is operationalized.
+
 ## Phase 5 — Training dataset and temporal modeling — NOT STARTED
 
 Use the materialized point-in-time features to build labeled event-level rows,
