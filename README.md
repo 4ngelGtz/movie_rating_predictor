@@ -5,10 +5,10 @@ movie at least 4. Every training feature must use only information available
 strictly before the rating event and must be reproducible by the future online
 serving path.
 
-No model or complete production feature pipeline has been implemented yet.
-Phase 4A–4D feature logic and Phase 4E-1 through 4E-3 checkpoint/replay and
-equivalence work are complete; full materialization remains next. The existing
-notebooks contain exploratory analysis only.
+No model has been implemented yet. Phase 4 is complete: the production v1
+feature path materializes all 17 contracted predictors with checkpoint/replay
+parity and reproducibility metadata. The existing notebooks contain
+exploratory analysis only.
 
 ## Setup
 
@@ -60,7 +60,7 @@ Generated data is ignored by Git. Keep the MovieLens source files in
 | Phase 4E-1 — Checkpoint schema and persistence/restore | COMPLETE |
 | Phase 4E-2 — Resume/replay and provenance enforcement | COMPLETE |
 | Phase 4E-3 — Uninterrupted/replay equivalence | COMPLETE |
-| Phase 4E-4 — Full feature materialization | NEXT |
+| Phase 4E-4 — Full feature materialization | COMPLETE |
 | Phase 5 — Training dataset and temporal modeling | NOT STARTED |
 | Phase 6+ — Online state and serving | NOT STARTED |
 
@@ -119,7 +119,8 @@ movie expanding rating count/mean/population-standard-deviation features in
 pre-batch state and applied only after the complete batch is emitted. The
 underlying sparse `count`/`mean`/`M2` state in `src/state/moments.py` has a
 deterministic, JSON-compatible representation. Phase 4E-1 now wraps it in the
-strict checkpoint lifecycle; replay orchestration and materialization remain.
+strict checkpoint lifecycle; Phase 4E completes replay orchestration and
+materialization.
 
 ## Phase 4B: Recency and rolling activity
 
@@ -149,8 +150,8 @@ drop canonical rating events and does not alter the timestamp-batch lifecycle.
 `src/features/catalog.py` also provides an order-invariant SHA-256
 `catalog_snapshot_id` covering both canonical tables. Deterministic content
 identity is therefore available and persisted in Phase 4E-1 checkpoints.
-Phase 4E-2 recomputes and enforces it before resume; feature-output provenance
-remains later Phase 4E work.
+Phase 4E-2 recomputes and enforces it before resume, and Phase 4E-4 records it
+with each materialized feature output.
 
 > A feature row is produced using one explicit frozen canonical catalog
 > snapshot. At present, “versioned” means its content can be identified
@@ -189,7 +190,8 @@ commits state and provenance together, so rejected operations cannot partially
 expire or update live state. `replay_next_batch_features()` uses that lifecycle
 to emit the complete 17-feature Phase 4A-D rows from one shared pre-batch
 snapshot before applying the timestamp batch. These rows remain in memory;
-full materialization belongs to later Phase 4E work.
+Phase 4E-4 uses the same feature and state semantics for persisted full-source
+materialization.
 
 Range replay is atomic at the public-call boundary as well. `replay_batches()`
 and `replay_remaining()` prepare every batch on an isolated session copy and
@@ -209,8 +211,26 @@ also required to reach the same canonical dynamic state and event provenance,
 including under shuffled physical input and catalog ordering and a bounded
 randomized matrix.
 
-Phase 4E-4 remains responsible for materializing those predictors from
-canonical Parquet inputs with reproducible output provenance metadata.
+Phase 4E-4 provides a bounded-memory production CLI that validates the
+canonical processed ratings, movies, and links Parquet sources, derives the
+canonical `rating_events`, `movies`, and `movie_genre` views, and atomically
+publishes the complete event-grain feature artifact and deterministic metadata:
+
+```bash
+.venv/bin/python -m src.features.materialize
+```
+
+The default outputs are:
+
+```text
+data/features/rating_features_v1.parquet
+data/features/rating_features_v1.metadata.json
+```
+
+The metadata records source paths and file SHA-256 values, `historySourceId`,
+`catalogSnapshotId`, contract/schema versions, row and predictor counts,
+timestamp bounds, and the complete output schema. Generated artifacts remain
+ignored by Git.
 
 It does not add new predictors or external enrichment, and it does not include
 modeling, final temporal splits, serving APIs, or feature-store infrastructure.

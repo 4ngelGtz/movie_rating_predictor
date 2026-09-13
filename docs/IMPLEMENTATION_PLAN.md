@@ -37,7 +37,7 @@ behavior, cold-start fallbacks, and dtypes for 17 predictors: two global, four
 user, four movie, three user × target-genre, and four static/context features.
 IDs, timestamps, and provenance columns are not predictors.
 
-## Phase 4 — Feature implementation — IN PROGRESS
+## Phase 4 — Feature implementation — COMPLETE
 
 Feature state transitions are shared foundations for historical construction
 and eventual online updates. Equal-timestamp and cold-start behavior are tested
@@ -65,7 +65,7 @@ timestamp. A deterministic, order-invariant SHA-256 `catalog_snapshot_id` can
 identify the canonical `movies` plus `movie_genre` content. Phase 4E-1 persists
 that identity, and Phase 4E-2 enforces it at resume.
 
-### 4E — Checkpoint/replay and full feature materialization — IN PROGRESS
+### 4E — Checkpoint/replay and full feature materialization — COMPLETE
 
 #### 4E-1 — Checkpoint schema, cutoff semantics, persistence/restore — COMPLETE
 
@@ -131,10 +131,7 @@ An error in any later batch discards all progress prepared by that range call.
 `replay_next_batch_features()` resolves one row per canonical event with all 17
 Phase 4A-D predictors from the shared pre-batch `H(t)`, applies the complete
 timestamp batch only after every row is resolved, and advances the session.
-It returns the in-memory rows for immediate equivalence testing; persisted and
-full-source feature materialization remain later work.
-
-Full feature materialization remains a later 4E substep.
+It returns the in-memory rows used for immediate equivalence testing.
 
 #### 4E-3 — Uninterrupted vs checkpoint/resume/replay equivalence — COMPLETE
 
@@ -160,19 +157,33 @@ identities, prefix and final progress counters, and reconstructed applied-event
 provenance are also asserted. A bounded randomized matrix and independent
 row/ID conservation plus hand-computed checks supplement direct equivalence.
 
-Remaining Phase 4E work must deliver:
+#### 4E-4 — Full feature materialization — COMPLETE
 
-1. Full materialization of the 17-feature dataset from canonical Parquet inputs.
-2. Enforcement of the persisted `catalog_snapshot_id` on materialized feature
-   outputs.
-3. Event-conservation checks through persisted materialization and multi-valued
-   genre expansion.
-4. Provenance metadata sufficient to reproduce the materialized dataset,
-   including the source snapshot, catalog identity, feature contract version,
-   and temporal cutoff semantics.
+`python -m src.features.materialize` validates the canonical processed ratings,
+movies, and links Parquet inputs, derives the canonical Phase 2 rating-event,
+movie, and movie-genre views, and writes one event-grain Parquet row containing
+context/provenance plus exactly the 17 v1 predictors.
 
-The checkpoint cadence, physical serialization and feature-output formats,
-storage layout, and command/API shape remain implementation choices.
+The production builder processes chronologically sorted timestamp batches in
+bounded-memory chunks. Chunk boundaries never split a timestamp tie, and each
+chunk is written as a Parquet row group. Publication stages and validates the
+complete artifact before atomic replacement, so input or generation failures
+leave existing outputs unchanged.
+
+The deterministic metadata JSON records materialization and feature-contract
+versions, row and predictor counts, predictor names, timestamp bounds, complete
+output dtypes, canonical source paths and SHA-256 values, `historySourceId`,
+`catalogSnapshotId`, derivation descriptions, and strict-prior temporal
+semantics. The default regeneration command and ignored output paths are:
+
+```text
+.venv/bin/python -m src.features.materialize
+data/features/rating_features_v1.parquet
+data/features/rating_features_v1.metadata.json
+```
+
+The canonical MovieLens 20M run published and independently validated
+20,000,263 unique event rows and 17 predictors.
 
 Phase 4E does not include new predictor families, TMDb/person enrichment,
 tags/genome features, embeddings, collaborative filtering, model training,
