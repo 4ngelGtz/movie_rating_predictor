@@ -69,7 +69,7 @@ user 1 ─── N rating_event N ─── 1 movie
 | Entity       | Primary key     | One-row-per grain                                                               | Sources           | Attributes and time semantics                                                                                                                                                                                                                                                                                                                     |
 | ------------ | --------------- | ------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | User         | `userId`        | MovieLens user observed in ratings or tags                                      | `ratings`, `tags` | There are no truly static user attributes. `firstObservedTimestamp` is the earliest rating or tag time, and nullable `firstRatingTimestamp` is the earliest rating time. Both are lifecycle metadata derived from the extract and must not be attached to earlier observations as predictors.                                                     |
-| Movie        | `movieId`       | MovieLens catalog movie                                                         | `movies`, `links` | `title` is preserved verbatim. Nullable `releaseYear` is conservatively parsed only from a terminal `(YYYY)` after ignoring outer whitespace; `(0000)` is missing because the Gregorian calendar and movie-age definition have no year zero. `imdbId` and `tmdbId` use nullable types; neither is the canonical key. `genreStatus` is `listed` or `missing_in_source`. These undated catalog values are only provisionally static under Phase 1. |
+| Movie        | `movieId`       | MovieLens catalog movie                                                         | `movies`, `links` | `title` is preserved verbatim. Nullable `releaseYear` is conservatively parsed only from a terminal `(YYYY)` after ignoring outer whitespace; `(0000)` is missing because the Gregorian calendar and movie-age definition have no year zero. `imdbId` and `tmdbId` use nullable types; neither is the canonical key. `genreStatus` is `listed` or `missing_in_source`. Feature Dictionary v1 treats these undated values as a frozen canonical catalog snapshot under its documented availability assumption. |
 | Genre        | `genreId`       | Exact canonical MovieLens genre label                                           | `movies`          | `genreName` equals the already-normalized source token. Labels are not case-folded, slugged, or otherwise merged. `(no genres listed)` is not a genre entity.                                                                                                                                                                                     |
 | Director     | `directorId`    | Externally identified person with a director credit                             | not available     | No current table contains directors or stable person IDs. Names must not be used as invented identifiers. Future cached enrichment must supply a stable, source-qualified person ID.                                                                                                                                                              |
 | Actor        | `actorId`       | Externally identified person with a cast credit                                 | not available     | Same identity constraint as directors. A person may appear in any number of movies.                                                                                                                                                                                                                                                               |
@@ -168,8 +168,9 @@ Each source event may be applied at most once to each affected state key. The
 idempotency/provenance identity is `(state table, entity key, ratingEventId)`.
 For multi-valued relationships, one event legitimately has one such identity
 per related key. Retry or replay logic must prevent a second application of the
-same identity. A snapshot engine and physical checkpoint cadence remain future
-implementation work.
+same identity. Serializable state primitives now exist, but operational
+duplicate-application enforcement, checkpoint/replay orchestration, persisted
+cutoff metadata, and physical checkpoint cadence remain Phase 4E work.
 
 ## Cold start and invariants
 
@@ -194,8 +195,13 @@ timestamp exclusion;
 
 ## Source limitations and assumptions
 
-- The catalog, links, and genome tables have no availability timestamp. Their
-  historical use still needs the temporal justification required by Phase 1.
+- The catalog, links, and genome tables have no availability timestamp. Feature
+  Dictionary v1 explicitly adopts a frozen canonical snapshot assumption for
+  `movies` and `movie_genre`; historical availability cannot be proven and this
+  limitation must be disclosed. Genome data remains deferred.
+- Phase 4D provides a deterministic, order-invariant SHA-256
+  `catalog_snapshot_id` for canonical `movies` plus `movie_genre`. Persisting and
+  enforcing it on checkpoints and feature outputs remains Phase 4E work.
 - Release year is embedded in most titles, not supplied as a dedicated field;
   parsing is conservative and missing when the pattern is ambiguous or is
   `(0000)`, which is not a valid Gregorian calendar year.

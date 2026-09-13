@@ -307,6 +307,10 @@ These should summarize only prior events.
 
 ## 9. Static Movie Enrichment
 
+This remains a planned extension after the compact leakage-safe baseline. It is
+not a prerequisite for Feature Dictionary v1, Phase 4 feature implementation,
+or Phase 4E materialization.
+
 Use `link.csv` to connect MovieLens movies to external metadata.
 
 Expected identifiers:
@@ -787,139 +791,113 @@ Avoid:
 
 ---
 
-## 21. Current Roadmap
+## 21. Roadmap
 
-Follow this sequence:
+### Original roadmap
 
-### Phase 0 — Repository and Parquet Data Layer
+The original plan placed TMDb director/actor enrichment before point-in-time
+feature builders, then separated training dataset construction, temporal
+validation, the baseline model, current online state, `/predict`, `/ratings`,
+and final parity tests into successive phases. That sequence established the
+long-term direction, but it was refined after the available MovieLens data and
+the first feature contract were examined.
 
-- organize raw and processed data
-- validate schemas
-- optimize dtypes
-- convert large CSV files to Parquet
-- keep raw inputs immutable
+In that historical numbering, enrichment was Phase 4, feature builders were
+Phase 5, and training through final parity occupied Phases 6–12. References in
+older commits may therefore use those numbers; the sequence below is current.
 
-### Phase 1 — Temporal Contract
+The compact v1 baseline deliberately uses MovieLens-derived rating, genre, and
+catalog information first. TMDb director/actor enrichment remains planned, but
+it is not required for Feature Dictionary v1 or the current Phase 4. Stable,
+source-qualified person identifiers and a versioned external snapshot are still
+required before any people-derived state or predictor can be enabled.
 
-Formalize:
+### Current engineering roadmap
 
-- target
-- prediction timestamp
-- strict `< t` rule
-- event ordering
-- handling of events with identical timestamps
-- rolling-window conventions
+Follow this sequence for current work:
 
-### Phase 2 — Entity Definitions
+#### Phase 0 — Data foundation — COMPLETE
 
-Finalize:
+Validate schemas and values, optimize dtypes, convert all six immutable raw
+MovieLens inputs to typed Parquet, and verify each round trip.
 
-- user
-- movie
-- genre
-- director
-- actor
-- rating event
-- cross-entity state tables
+#### Phase 1 — Temporal contract — COMPLETE
 
-### Phase 3 — Feature Dictionary v1
+Define the target, exclusive `timestamp < t` history, equal-timestamp atomic
+batches, and fixed windows `[t - W, t)`.
 
-Create a table for every proposed feature containing:
+#### Phase 2 — Entity model — COMPLETE
 
-- feature name
-- entity
-- mathematical definition
-- source data
-- temporal window
-- point-in-time rule
-- online availability
-- update rule
-- cold-start fallback
-- expected type
+Define canonical users, movies, genres, rating events, relationship bridges,
+source-event provenance, and sparse state identity. Director and actor entities
+remain contractual placeholders pending stable mappings.
 
-Do this before implementing many features.
+#### Phase 3 — Feature Dictionary v1 — COMPLETE
 
-### Phase 4 — TMDb Enrichment
+Specify the 17-feature compact baseline, including formulas, sources, temporal
+rules, update behavior, fallbacks, and dtypes, before broad implementation.
+Identifiers, timestamps, and provenance fields are observation context rather
+than predictors.
 
-Use `link.csv` to enrich movies with:
+#### Phase 4 — Feature implementation — IN PROGRESS
 
-- directors
-- main actors
-- stable external person identifiers
+- **4A — COMPLETE:** expanding global, user, and movie history.
+- **4B — COMPLETE:** user recency and rolling 30-day movie activity.
+- **4C — COMPLETE:** user × target-genre history.
+- **4D — COMPLETE:** static catalog/context and deterministic catalog content
+  identity.
+- **4E — NEXT:** checkpoint/replay orchestration and full feature
+  materialization from canonical Parquet inputs.
 
-Cache the results locally.
+Phase 4E must persist and restore complete state at an explicit exclusive
+cutoff, replay complete timestamp batches, prevent duplicate application at the
+canonical provenance grain, persist and enforce `catalog_snapshot_id`, prove
+uninterrupted/replay equivalence and event conservation, and record enough
+provenance to reproduce a materialized feature dataset. Checkpoint cadence,
+physical formats, and storage layout remain implementation choices.
 
-### Phase 5 — Point-in-Time Feature Builders
+Phase 4E does not add predictor families, external enrichment, tags/genome
+features, embeddings, collaborative filtering, modeling, serving APIs, or
+feature-store infrastructure.
 
-Implement concise pandas-based feature logic.
+#### Phase 5 — Training dataset and temporal modeling — NOT STARTED
 
-Prioritize:
+Progress from full feature materialization to a labeled event-level dataset,
+temporal train/validation/test splits, a simple baseline classifier, and
+evaluation. Exact split dates and fitted preprocessing belong here.
 
-- user state
-- movie rolling state
-- user-genre state
-- user-director state
+#### Phase 6 — Current online state — NOT STARTED
 
-Add user-actor state only if it remains manageable.
+Materialize the latest state required for online prediction.
 
-### Phase 6 — Training Dataset
+#### Phase 7 — FastAPI `/predict` — NOT STARTED
 
-Generate historical labeled observations using point-in-time-correct features.
+Generate an online score from `userId`, `movieId`, and `timestamp`.
 
-### Phase 7 — Temporal Validation
+#### Phase 8 — FastAPI `/ratings` — NOT STARTED
 
-Create train, validation, and test periods.
+Ingest a new rating event and update the relevant feature state.
 
-### Phase 8 — Baseline Model
+#### Phase 9 — End-to-end parity and temporal tests — NOT STARTED
 
-Start with a simple classifier before trying more complex models.
+Complete serving-level leakage, boundary, cold-start, replay, and offline/online
+parity coverage. Foundational tests are already developed alongside earlier
+phases; this phase closes the integrated system contract.
 
-### Phase 9 — Current Online State
+### Deferred enrichment
 
-Materialize the latest state needed for online prediction.
-
-### Phase 10 — FastAPI `/predict`
-
-Generate an online score from:
-
-```text
-userId
-movieId
-timestamp
-```
-
-### Phase 11 — FastAPI `/ratings`
-
-Ingest a new rating event and update relevant feature state.
-
-### Phase 12 — Parity and Temporal Tests
-
-Add tests for:
-
-- leakage prevention
-- `< t` correctness
-- rolling-window boundaries
-- cold-start behavior
-- offline / online feature parity
+TMDb movie-director and movie-actor mappings remain a planned extension after
+the compact leakage-safe baseline. Cache normalized mappings with stable
+external person identifiers and documented snapshot availability before adding
+director-, actor-, or user-person features.
 
 ---
 
-## 22. What Codex Should Do First
+## 22. What Codex Should Do Next
 
-Do not jump directly into modeling.
-
-Start with Phase 0 and Phase 1.
-
-First inspect the repository and existing files.
-
-Then propose the smallest clean change set required to:
-
-1. organize the data layer;
-2. create a reproducible Python environment if one does not already exist;
-3. add PyArrow;
-4. convert the large MovieLens CSV files to typed Parquet;
-5. validate row counts and schemas;
-6. document the temporal contract.
+Proceed to Phase 4E. Complete checkpoint/replay and provenance guarantees
+before materializing the full 17-feature dataset. Do not begin modeling until
+the uninterrupted and restored/replayed feature paths are equivalent.
 
 Keep all implementation decisions consistent with the principles in this document.
 

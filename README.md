@@ -5,8 +5,10 @@ movie at least 4. Every training feature must use only information available
 strictly before the rating event and must be reproducible by the future online
 serving path.
 
-No model or complete production feature pipeline has been implemented yet. The
-existing notebooks contain exploratory analysis only.
+No model or complete production feature pipeline has been implemented yet.
+Phase 4A–4D feature logic is complete; Phase 4E checkpoint/replay and full
+materialization is next. The existing notebooks contain exploratory analysis
+only.
 
 ## Setup
 
@@ -42,6 +44,25 @@ movie_rating_predictor/
 
 Generated data is ignored by Git. Keep the MovieLens source files in
 `data/raw/` and never edit them in place.
+
+## Current status
+
+| Phase | Status |
+|---|---|
+| Phase 0 — Data foundation | COMPLETE |
+| Phase 1 — Temporal contract | COMPLETE |
+| Phase 2 — Entity model | COMPLETE |
+| Phase 3 — Feature Dictionary v1 | COMPLETE |
+| Phase 4A — Expanding global/user/movie history | COMPLETE |
+| Phase 4B — Recency and rolling activity | COMPLETE |
+| Phase 4C — User × target-genre history | COMPLETE |
+| Phase 4D — Static catalog/context | COMPLETE |
+| Phase 4E — Checkpoint/replay and full materialization | NEXT |
+| Phase 5 — Training dataset and temporal modeling | NOT STARTED |
+| Phase 6+ — Online state and serving | NOT STARTED |
+
+The current engineering roadmap and Phase 4E contract are in
+[`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
 
 ## Phase 0: Parquet data layer
 
@@ -122,12 +143,32 @@ release-year missingness, and age at the scored event timestamp from one
 explicit canonical `movies` plus `movie_genre` snapshot. The builder validates
 and indexes that frozen catalog once, so static resolution cannot duplicate or
 drop canonical rating events and does not alter the timestamp-batch lifecycle.
-`src/features/catalog.py` also provides an order-invariant SHA-256 content
-identity covering both canonical tables. Persisting and enforcing that identity
-on feature outputs and checkpoints remains Phase 4E work.
+`src/features/catalog.py` also provides an order-invariant SHA-256
+`catalog_snapshot_id` covering both canonical tables. Deterministic content
+identity is therefore available; persisting and enforcing it on feature outputs
+and checkpoints remains Phase 4E work.
 
-> A feature row is produced using one explicit, versioned canonical catalog
-> snapshot.
+> A feature row is produced using one explicit frozen canonical catalog
+> snapshot. At present, “versioned” means its content can be identified
+> deterministically; persisted version enforcement remains Phase 4E work.
+
+## Phase 4E: Checkpoint/replay and full materialization
+
+Phase 4E will persist and restore complete state at explicit exclusive cutoffs,
+replay complete timestamp batches with duplicate-application protection, attach
+and enforce `catalog_snapshot_id`, prove uninterrupted/replay equivalence and
+event conservation, and materialize all 17 v1 predictors from canonical Parquet
+inputs with reproducible provenance metadata. Serialization formats, checkpoint
+cadence, storage layout, and command shape remain implementation choices.
+
+It does not add new predictors or external enrichment, and it does not include
+modeling, final temporal splits, serving APIs, or feature-store infrastructure.
+After 4E, Phase 5 constructs labeled event-level data, defines temporal splits,
+fits a simple baseline, and evaluates it.
+
+TMDb director/actor mappings remain a planned extension after the compact
+leakage-safe baseline. They are not required for Feature Dictionary v1 or Phase
+4E.
 
 ## Current notebooks
 

@@ -24,7 +24,8 @@ event updates global, user, and movie state once. A movie-genre bridge join may
 produce one update per `(ratingEventId, genreId)`, but must not create another
 canonical event or change canonical event counts. Checkpoints represent complete
 `H(checkpointCutoff)` and replay only complete batches in
-`[checkpointCutoff, t)` with idempotency at the Phase 2 provenance grain.
+`[checkpointCutoff, t)`; Phase 4E replay must enforce idempotency at the Phase 2
+provenance grain.
 
 ## 2. Notation and shared policies
 
@@ -49,9 +50,9 @@ in `float64`; exposed means and standard deviations are `float32`.
 ### Fallback root
 
 `global_mean_rating(t)` is the mean of `H(t)`. When `H(t)` is empty, it is the
-fixed constant `3.5`, the midpoint of the allowed MovieLens rating scale. This
-constant is configuration, not fitted data. No full-dataset or later-training
-aggregate is legal. User means fall back to this point-in-time global mean;
+fixed baseline prior `3.5` chosen by this feature contract. This constant is
+configuration, not fitted data. No full-dataset or later-training aggregate is
+legal. User means fall back to this point-in-time global mean;
 movie means do the same; target-genre user means fall back to the resolved user
 mean. Standard deviations fall back to `0.0` only when support is zero; for one
 observation population standard deviation is exactly `0.0`. Support features
@@ -75,6 +76,10 @@ that movie can be scored. This gives offline/online parity when serving loads
 the same catalog snapshot, but historical availability cannot be proven from
 the source. Results using genre/year features must disclose this limitation and
 should be compared with a dynamic-history-only baseline.
+
+In the current implementation, “versioned” means that Phase 4D can compute a
+deterministic content identity. Persisting and enforcing that identity is Phase
+4E work.
 
 `releaseYear` is the conservative terminal-title parse defined in Phase 2. It
 is not a release date. The terminal token `(0000)` is missing because the
@@ -158,15 +163,18 @@ because they let the model distinguish evidence from fallback values.
   point-in-time state to the fixed `3.5` root; no future aggregate is used.
   Recency and unavailable release metadata remain genuinely missing.
 - **Global priors:** global count/mean are historical online state, not fitted
-  constants. The only constant is the declared rating-scale midpoint. Any later
-  scaler, encoder, or imputer must be fit on the training partition and frozen
-  for validation/test/serving, without changing historical feature values.
+  constants. The only fallback constant is the contracted `3.5` baseline prior.
+  Any later scaler, encoder, or imputer must be fit on the training partition
+  and frozen for validation/test/serving, without changing historical feature
+  values.
 - **Genre expansion:** bridge keys are unique and every expanded update retains
   `ratingEventId`. Global, user, and movie counts use canonical events only.
   User-target-genre counts intentionally count associations and are named as
   such; overlap cannot masquerade as canonical event support.
-- **State updates:** idempotency is checked at `(state table, entity key,
-  ratingEventId)`. Window eviction preserves the inclusive left boundary.
+- **State updates:** serializable state primitives and deterministic restoration
+  exist. Operational replay must enforce idempotency at `(state table, entity
+  key, ratingEventId)` in Phase 4E. Window eviction preserves the inclusive
+  left boundary.
 - **Source verification:** all dynamic columns exist in canonical
   `ratings.parquet`; static `title`/`genres` inputs exist in `movies.parquet`;
   `releaseYear`, `genreStatus`, `ratingEventId`, `highRating`, and bridge tables
@@ -175,13 +183,13 @@ because they let the model distinguish evidence from fallback values.
   state; the 30-day count additionally requires timestamped eviction state.
   Genre and year features require the identical versioned catalog snapshot.
 
-## 6. Open question before Phase 4
+## 6. Catalog identity and remaining provenance work
 
-The feature semantics are closed. One operational provenance choice remains:
-the repository has no catalog-snapshot version field or manifest. Phase 4 must
-choose a deterministic identifier (preferably a content digest of canonical
-`movies` plus `movie_genre`) and persist it with feature output/checkpoints so
-offline and online code can prove they used the same frozen static snapshot.
+The feature semantics are closed. Phase 4D added deterministic, order-invariant
+SHA-256 `catalog_snapshot_id` generation over canonical `movies` plus
+`movie_genre`. Phase 4E must persist and enforce that identity on feature
+outputs and checkpoints so offline and online code can prove that they used the
+same frozen static snapshot.
 
 ## 7. Phase 4 implementation order
 
@@ -190,15 +198,16 @@ offline and online code can prove they used the same frozen static snapshot.
 2. Implement the singleton global accumulator and shared count/sum/M2 logic;
    expose user and movie expanding features plus fallback resolution.
 3. Add user last-rating time and the exact `[t-30 days, t)` movie queue, including
-   left-boundary and replay/idempotency tests.
+   left-boundary tests; complete operational replay/idempotency tests in Phase
+   4E.
 4. Build the validated movie-genre bridge once, then add user-genre accumulators
    and target-genre read-time aggregation while asserting canonical event-count
    conservation.
 5. Add versioned static catalog joins and release-age calculation, including
    missing and negative-age cases.
-6. Compare a dynamic-only build with the full v1 build, run on a small fixture,
-   then on the canonical Parquet data. Materialize only after equality between
-   uninterrupted replay and checkpoint/replay is demonstrated.
+6. In Phase 4E, compare a dynamic-only build with the full v1 build, run on a
+   small fixture, then on the canonical Parquet data. Materialize only after
+   equality between uninterrupted replay and checkpoint/replay is demonstrated.
 
 Exact temporal split dates are a Phase 5 choice. They do not alter any feature
 definition above, but must be fixed before reporting validation or test metrics.
