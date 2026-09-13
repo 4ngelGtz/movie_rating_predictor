@@ -105,6 +105,16 @@ elapsed seconds and canonical movie rating activity over the exact trailing
 timestamp batches live alongside the expanding state, and current-batch events
 become visible only after every tied row is emitted.
 
+## Phase 4C: User-target-genre history
+
+Phase 4C adds sparse `(userId, genreId)` association moments to the same
+timestamp-batch engine. Each canonical event still updates global, user, and
+movie state exactly once, while its distinct canonical movie-genre memberships
+each receive one auxiliary relationship update. Target-movie genres are
+resolved into association support, an association-weighted historical mean,
+and its delta from the user's historical mean using the same strict pre-batch
+snapshot.
+
 ## Current notebooks
 
 > **Exploratory analysis only:** temporal calculations in the notebooks do not

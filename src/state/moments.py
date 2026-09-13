@@ -118,6 +118,9 @@ class HistoricalRatingState:
     global_moments: RunningMoments = field(default_factory=RunningMoments)
     user_moments: dict[int, RunningMoments] = field(default_factory=dict)
     movie_moments: dict[int, RunningMoments] = field(default_factory=dict)
+    user_genre_moments: dict[tuple[int, str], RunningMoments] = field(
+        default_factory=dict
+    )
     last_user_rating: dict[int, pd.Timestamp] = field(default_factory=dict)
     movie_rating_count_30d: dict[int, int] = field(default_factory=dict)
     _movie_rating_batches_30d: deque[
@@ -148,6 +151,7 @@ class HistoricalRatingState:
         ratings: Iterable[tuple[int, int, float]],
         *,
         timestamp: Any | None = None,
+        movie_genres: Mapping[int, tuple[str, ...]] | None = None,
     ) -> None:
         """Apply one already-scored timestamp batch atomically to all states.
 
@@ -155,9 +159,19 @@ class HistoricalRatingState:
         The caller is responsible for passing each event exactly once.  Batch
         moments are reduced independently of input order before being merged.
         When ``timestamp`` is supplied, recency and rolling state are updated
-        for the complete batch as well. The optional form preserves the Phase
-        4A moments-only API.
+        for the complete batch as well. When ``movie_genres`` is supplied,
+        each canonical event additionally updates one sparse user-genre state
+        per distinct genre associated with its movie. These relationship
+        updates do not alter canonical global, user, or movie counts.
         """
+        if movie_genres is not None:
+            for movie_id, genre_ids in movie_genres.items():
+                if len(genre_ids) != len(set(genre_ids)):
+                    raise ValueError(
+                        "movie_genres memberships must be distinct for each movie; "
+                        f"duplicate found for movieId {movie_id}"
+                    )
+
         batch = [
             (int(user_id), int(movie_id), float(rating))
             for user_id, movie_id, rating in ratings
@@ -172,9 +186,13 @@ class HistoricalRatingState:
 
         users: dict[int, list[float]] = {}
         movies: dict[int, list[float]] = {}
+        user_genres: dict[tuple[int, str], list[float]] = {}
         for user_id, movie_id, rating in batch:
             users.setdefault(user_id, []).append(rating)
             movies.setdefault(movie_id, []).append(rating)
+            if movie_genres is not None:
+                for genre_id in movie_genres.get(movie_id, ()):
+                    user_genres.setdefault((user_id, genre_id), []).append(rating)
 
         for user_id in sorted(users):
             self.user_moments.setdefault(user_id, RunningMoments()).merge(
@@ -183,6 +201,10 @@ class HistoricalRatingState:
         for movie_id in sorted(movies):
             self.movie_moments.setdefault(movie_id, RunningMoments()).merge(
                 RunningMoments.from_values(movies[movie_id])
+            )
+        for key in sorted(user_genres):
+            self.user_genre_moments.setdefault(key, RunningMoments()).merge(
+                RunningMoments.from_values(user_genres[key])
             )
 
         if batch_timestamp is not None:
@@ -209,6 +231,14 @@ class HistoricalRatingState:
                 {"movieId": key, **self.movie_moments[key].to_dict()}
                 for key in sorted(self.movie_moments)
             ],
+            "userGenres": [
+                {
+                    "userId": user_id,
+                    "genreId": genre_id,
+                    **self.user_genre_moments[(user_id, genre_id)].to_dict(),
+                }
+                for user_id, genre_id in sorted(self.user_genre_moments)
+            ],
             "lastUserRatings": [
                 {"userId": key, "timestamp": self.last_user_rating[key].isoformat()}
                 for key in sorted(self.last_user_rating)
@@ -233,7 +263,8 @@ class HistoricalRatingState:
             "lastUserRatings",
             "movieRatingBatches30d",
         }
-        if set(payload) not in (phase_4a_keys, phase_4b_keys):
+        phase_4c_keys = phase_4b_keys | {"userGenres"}
+        if set(payload) not in (phase_4a_keys, phase_4b_keys, phase_4c_keys):
             raise ValueError("state payload has unexpected or missing fields")
 
         state = cls(global_moments=RunningMoments.from_dict(payload["global"]))
@@ -250,6 +281,16 @@ class HistoricalRatingState:
                 raise ValueError(f"duplicate movieId in state payload: {movie_id}")
             state.movie_moments[movie_id] = RunningMoments.from_dict(
                 {key: row[key] for key in ("count", "mean", "M2")}
+            )
+
+        for row in payload.get("userGenres", []):
+            user_id = int(row["userId"])
+            genre_id = str(row["genreId"])
+            key = (user_id, genre_id)
+            if not genre_id or key in state.user_genre_moments:
+                raise ValueError("user-genre state keys must be unique and nonempty")
+            state.user_genre_moments[key] = RunningMoments.from_dict(
+                {name: row[name] for name in ("count", "mean", "M2")}
             )
 
         for row in payload.get("lastUserRatings", []):

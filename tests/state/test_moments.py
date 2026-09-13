@@ -37,11 +37,32 @@ def test_batch_updates_are_order_independent_and_count_every_event() -> None:
 
 def test_state_checkpoint_representation_is_deterministic_and_round_trips() -> None:
     state = HistoricalRatingState()
-    state.apply_timestamp_batch([(2, 20, 4.0), (1, 10, 2.0)])
+    state.apply_timestamp_batch(
+        [(2, 20, 4.0), (1, 10, 2.0)],
+        movie_genres={10: ("Drama", "Romance"), 20: ("Comedy",)},
+    )
     payload = state.to_dict()
 
     assert [row["userId"] for row in payload["users"]] == [1, 2]
     assert [row["movieId"] for row in payload["movies"]] == [10, 20]
+    assert [(row["userId"], row["genreId"]) for row in payload["userGenres"]] == [
+        (1, "Drama"),
+        (1, "Romance"),
+        (2, "Comedy"),
+    ]
     assert json.dumps(payload, separators=(",", ":")) == json.dumps(
         HistoricalRatingState.from_dict(payload).to_dict(), separators=(",", ":")
     )
+
+
+def test_duplicate_movie_genre_memberships_are_rejected_before_state_updates() -> None:
+    state = HistoricalRatingState()
+    before = state.to_dict()
+
+    with pytest.raises(ValueError, match="memberships must be distinct.*movieId 10"):
+        state.apply_timestamp_batch(
+            [(1, 10, 4.0)],
+            movie_genres={10: ("Drama", "Drama")},
+        )
+
+    assert state.to_dict() == before
