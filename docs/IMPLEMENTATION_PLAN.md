@@ -63,7 +63,7 @@ association-weighted mean rating, and delta from the resolved user mean.
 Implements genre count, release year and missingness, and movie age at the event
 timestamp. A deterministic, order-invariant SHA-256 `catalog_snapshot_id` can
 identify the canonical `movies` plus `movie_genre` content. Phase 4E-1 persists
-that identity; runtime enforcement belongs to later Phase 4E work.
+that identity, and Phase 4E-2 enforces it at resume.
 
 ### 4E — Checkpoint/replay and full feature materialization — IN PROGRESS
 
@@ -134,18 +134,40 @@ timestamp batch only after every row is resolved, and advances the session.
 It returns the in-memory rows for immediate equivalence testing; persisted and
 full-source feature materialization remain later work.
 
-Full feature materialization and dataset-level replay equivalence remain later
-4E substeps.
+Full feature materialization remains a later 4E substep.
+
+#### 4E-3 — Uninterrupted vs checkpoint/resume/replay equivalence — COMPLETE
+
+The uninterrupted `build_expanding_rating_features(...)` result is the sole
+feature reference path. Equivalence tests process the exact canonical prefix,
+publish and JSON-round-trip a checkpoint, resume against the bound history and
+catalog, feature-replay the suffix, and align both results by
+`ratingEventId`. The context columns and all 17 Phase 4A-D predictors compare
+exactly, including dtypes and missing values.
+
+Coverage includes empty prefixes, timestamp boundaries, between-timestamp
+cutoffs, tied batches, 30-day rolling boundaries at nanosecond precision, the
+final batch, and cutoffs after all events. Fixtures exercise cold starts,
+missing and multi-genre movies, partial genre support, association weighting,
+duplicate-looking events with distinct IDs, missing and future release years,
+and shuffled event, index, movie, and bridge ordering.
+
+After complete replay, canonical serialized dynamic state is compared with an
+uninterrupted history session at a common expiration cutoff. This covers every
+moment map, recency, rolling queues and counts, expiration lifecycle,
+user-genre associations, and timestamp lifecycle metadata. Source/catalog
+identities, prefix and final progress counters, and reconstructed applied-event
+provenance are also asserted. A bounded randomized matrix and independent
+row/ID conservation plus hand-computed checks supplement direct equivalence.
 
 Remaining Phase 4E work must deliver:
 
-1. Enforcement of the persisted `catalog_snapshot_id` on feature outputs.
-2. Tests proving uninterrupted and checkpoint/restored replay produce equivalent
-   features.
-3. Event-conservation checks through full materialization and multi-valued genre
-   expansion.
-4. Full materialization of the 17-feature dataset from canonical Parquet inputs.
-5. Provenance metadata sufficient to reproduce the materialized dataset,
+1. Full materialization of the 17-feature dataset from canonical Parquet inputs.
+2. Enforcement of the persisted `catalog_snapshot_id` on materialized feature
+   outputs.
+3. Event-conservation checks through persisted materialization and multi-valued
+   genre expansion.
+4. Provenance metadata sufficient to reproduce the materialized dataset,
    including the source snapshot, catalog identity, feature contract version,
    and temporal cutoff semantics.
 

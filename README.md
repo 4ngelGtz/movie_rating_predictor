@@ -6,9 +6,9 @@ strictly before the rating event and must be reproducible by the future online
 serving path.
 
 No model or complete production feature pipeline has been implemented yet.
-Phase 4A–4D feature logic and Phase 4E-1 checkpoint persistence/restore are
-complete; replay and full materialization remain next. The existing notebooks
-contain exploratory analysis only.
+Phase 4A–4D feature logic and Phase 4E-1 through 4E-3 checkpoint/replay and
+equivalence work are complete; full materialization remains next. The existing
+notebooks contain exploratory analysis only.
 
 ## Setup
 
@@ -58,7 +58,9 @@ Generated data is ignored by Git. Keep the MovieLens source files in
 | Phase 4C — User × target-genre history | COMPLETE |
 | Phase 4D — Static catalog/context | COMPLETE |
 | Phase 4E-1 — Checkpoint schema and persistence/restore | COMPLETE |
-| Phase 4E-2+ — Replay and full materialization | NEXT |
+| Phase 4E-2 — Resume/replay and provenance enforcement | COMPLETE |
+| Phase 4E-3 — Uninterrupted/replay equivalence | COMPLETE |
+| Phase 4E-4 — Full feature materialization | NEXT |
 | Phase 5 — Training dataset and temporal modeling | NOT STARTED |
 | Phase 6+ — Online state and serving | NOT STARTED |
 
@@ -198,9 +200,17 @@ after over-expiration and detects missing retained activity. Persisted
 timestamps have the exact naïve form
 `YYYY-MM-DDTHH:MM:SS.fffffffff`.
 
-Later Phase 4E work will prove the broader dataset-level uninterrupted/replay
-equivalence and event conservation matrix and materialize all 17 v1 predictors
-from canonical Parquet inputs with reproducible provenance metadata.
+Phase 4E-3 proves that uninterrupted feature construction and checkpoint → JSON
+→ catalog-bound resume → suffix replay emit identical context and all 17 v1
+predictors after alignment by `ratingEventId`. The cutoff matrix covers empty
+prefixes, exact and between-timestamp boundaries, ties, nanosecond-precise
+30-day expiration, final events, and after-all checkpoints. Complete replay is
+also required to reach the same canonical dynamic state and event provenance,
+including under shuffled physical input and catalog ordering and a bounded
+randomized matrix.
+
+Phase 4E-4 remains responsible for materializing those predictors from
+canonical Parquet inputs with reproducible output provenance metadata.
 
 It does not add new predictors or external enrichment, and it does not include
 modeling, final temporal splits, serving APIs, or feature-store infrastructure.

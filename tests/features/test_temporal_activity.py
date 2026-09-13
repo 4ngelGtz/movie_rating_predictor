@@ -64,6 +64,26 @@ def test_same_timestamp_user_events_share_previous_rating_time() -> None:
     )
 
 
+def test_user_recency_preserves_subsecond_timestamp_precision() -> None:
+    source = events(
+        [
+            (1, 1, 10, 4.0, T),
+            (2, 1, 10, 4.0, T + pd.Timedelta(nanoseconds=1)),
+            (3, 1, 10, 4.0, T + pd.Timedelta(nanoseconds=1_001)),
+            (4, 1, 10, 4.0, T + pd.Timedelta(nanoseconds=1_001_001)),
+            (5, 1, 10, 4.0, T + pd.Timedelta(nanoseconds=1_001_001_001)),
+        ]
+    )
+
+    result = build_expanding_rating_features(source, EMPTY_MOVIE_GENRES)
+
+    assert result["user_seconds_since_last_rating"].tolist() == pytest.approx(
+        [np.nan, 1e-9, 1e-6, 1e-3, 1.0], nan_ok=True
+    )
+    assert result.loc[1, "user_seconds_since_last_rating"] == pytest.approx(1e-9)
+    assert str(result["user_seconds_since_last_rating"].dtype) == "float64"
+
+
 def test_movie_activity_boundaries_are_exact() -> None:
     source = events(
         [

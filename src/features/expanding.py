@@ -95,7 +95,7 @@ def _resolved_features(
     movie_moments = state.movie_moments.get(movie_id, RunningMoments())
     previous_user_rating = state.last_user_rating.get(user_id)
     user_seconds_since_last_rating = (
-        (prediction_timestamp - previous_user_rating).total_seconds()
+        (prediction_timestamp.value - previous_user_rating.value) / 1_000_000_000
         if previous_user_rating is not None
         else np.nan
     )
