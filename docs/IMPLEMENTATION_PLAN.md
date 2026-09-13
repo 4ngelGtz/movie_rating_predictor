@@ -62,29 +62,59 @@ association-weighted mean rating, and delta from the resolved user mean.
 
 Implements genre count, release year and missingness, and movie age at the event
 timestamp. A deterministic, order-invariant SHA-256 `catalog_snapshot_id` can
-identify the canonical `movies` plus `movie_genre` content. Persisting and
-enforcing that identity belongs to Phase 4E.
+identify the canonical `movies` plus `movie_genre` content. Phase 4E-1 persists
+that identity; runtime enforcement belongs to later Phase 4E work.
 
-### 4E — Checkpoint/replay and full feature materialization — NEXT
+### 4E — Checkpoint/replay and full feature materialization — IN PROGRESS
 
-Phase 4E must deliver:
+#### 4E-1 — Checkpoint schema, cutoff semantics, persistence/restore — COMPLETE
 
-1. A checkpoint lifecycle whose `checkpointCutoff` is explicitly exclusive and
-   whose checkpoints are written only between complete timestamp batches.
-2. Persistence and restoration of complete historical feature state
-   representing `H(checkpointCutoff)`.
-3. Replay of complete batches in `[checkpointCutoff, t)`, scoring every event in
+The v1 JSON checkpoint is a strict, explicitly versioned envelope containing
+an exclusive `checkpointCutoff`, the required SHA-256 `catalogSnapshotId`, a
+deterministic SHA-256 `historySourceId`, source/progress counts, and the complete
+deterministic Phase 4A-C state payload. A cutoff `c` means exactly
+`H(c) = {events | timestamp < c}`: events at `c` have not been applied.
+
+`CheckpointHistorySession` validates and owns the complete canonical event
+frame, groups every timestamp tie into one indivisible batch, and controls the
+ordered processing cursor. Publication requires that cursor to equal the exact
+source batch boundary before `c`; this proves every source event below `c` was
+consumed and none at or above `c` was consumed, including when no event occurs
+at `c`. Every update requires the explicit movie-genre bridge. Bare state and
+the low-level mutable update API cannot establish checkpoint eligibility.
+Trusted source validation reuses the canonical MovieLens rating domain:
+`0.5, 1.0, ..., 5.0`.
+Phase 4E-1 validates persisted provenance format and internal consistency;
+matching a restored checkpoint's identities against the actual canonical
+sources remains Phase 4E-2 resume/replay work.
+
+The state records the rolling expiration watermark and cumulative number of
+expired canonical events. At publication the watermark equals `c`, and expired
+plus retained rolling events must equal global event support. Restore validates
+those lifecycle invariants together with types, entity/key domains, moments,
+recency timestamps, rolling order, and queue/summary consistency before
+returning mutable state. Persisted timestamps use exactly
+`YYYY-MM-DDTHH:MM:SS.fffffffff`; relative and timezone-aware forms are invalid.
+File publication uses same-directory temporary files and atomic replacement.
+
+Legacy raw Phase 4A-C state payloads remain distinct from checkpoint artifacts.
+Replay, idempotency, runtime catalog matching, and materialization remain later
+4E substeps.
+
+Remaining Phase 4E work must deliver:
+
+1. Replay of complete batches in `[checkpointCutoff, t)`, scoring every event in
    a tied batch before applying that batch.
-4. Duplicate-application protection at the canonical event/provenance grain,
+2. Duplicate-application protection at the canonical event/provenance grain,
    including relationship-state keys where one event has multiple legitimate
    updates.
-5. Persisted and enforced `catalog_snapshot_id` on checkpoints and feature
-   outputs.
-6. Tests proving uninterrupted and checkpoint/restored replay produce equivalent
+3. Enforcement of the persisted `catalog_snapshot_id` during replay and on
+   feature outputs.
+4. Tests proving uninterrupted and checkpoint/restored replay produce equivalent
    features.
-7. Event-conservation checks through replay and multi-valued genre expansion.
-8. Full materialization of the 17-feature dataset from canonical Parquet inputs.
-9. Provenance metadata sufficient to reproduce the materialized dataset,
+5. Event-conservation checks through replay and multi-valued genre expansion.
+6. Full materialization of the 17-feature dataset from canonical Parquet inputs.
+7. Provenance metadata sufficient to reproduce the materialized dataset,
    including the source snapshot, catalog identity, feature contract version,
    and temporal cutoff semantics.
 

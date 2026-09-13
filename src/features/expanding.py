@@ -11,7 +11,10 @@ from pandas.api.types import is_datetime64_any_dtype, is_integer_dtype, is_numer
 
 from src.data.schemas import RATING_VALUES
 from src.features.catalog import build_catalog_lookups
-from src.state.moments import HistoricalRatingState, RunningMoments
+from src.state.moments import (
+    HistoricalRatingState,
+    RunningMoments,
+)
 
 
 GLOBAL_MEAN_COLD_START = 3.5
@@ -248,7 +251,7 @@ def build_expanding_rating_features(
                 (int(row.userId), int(row.movieId), float(row.rating))
                 for row in batch.itertuples(index=False)
             ),
-            timestamp=timestamp,
+            timestamp=pd.Timestamp(timestamp),
             movie_genres=genres_by_movie,
         )
 

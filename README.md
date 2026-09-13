@@ -6,9 +6,9 @@ strictly before the rating event and must be reproducible by the future online
 serving path.
 
 No model or complete production feature pipeline has been implemented yet.
-Phase 4A–4D feature logic is complete; Phase 4E checkpoint/replay and full
-materialization is next. The existing notebooks contain exploratory analysis
-only.
+Phase 4A–4D feature logic and Phase 4E-1 checkpoint persistence/restore are
+complete; replay and full materialization remain next. The existing notebooks
+contain exploratory analysis only.
 
 ## Setup
 
@@ -57,7 +57,8 @@ Generated data is ignored by Git. Keep the MovieLens source files in
 | Phase 4B — Recency and rolling activity | COMPLETE |
 | Phase 4C — User × target-genre history | COMPLETE |
 | Phase 4D — Static catalog/context | COMPLETE |
-| Phase 4E — Checkpoint/replay and full materialization | NEXT |
+| Phase 4E-1 — Checkpoint schema and persistence/restore | COMPLETE |
+| Phase 4E-2+ — Replay and full materialization | NEXT |
 | Phase 5 — Training dataset and temporal modeling | NOT STARTED |
 | Phase 6+ — Online state and serving | NOT STARTED |
 
@@ -115,8 +116,8 @@ movie expanding rating count/mean/population-standard-deviation features in
 `src/features/expanding.py`. Equal-timestamp events are scored from one shared
 pre-batch state and applied only after the complete batch is emitted. The
 underlying sparse `count`/`mean`/`M2` state in `src/state/moments.py` has a
-deterministic, JSON-compatible checkpoint representation; checkpoint cutoffs,
-replay orchestration, and full materialization remain deferred to Phase 4E.
+deterministic, JSON-compatible representation. Phase 4E-1 now wraps it in the
+strict checkpoint lifecycle; replay orchestration and materialization remain.
 
 ## Phase 4B: Recency and rolling activity
 
@@ -145,21 +146,46 @@ and indexes that frozen catalog once, so static resolution cannot duplicate or
 drop canonical rating events and does not alter the timestamp-batch lifecycle.
 `src/features/catalog.py` also provides an order-invariant SHA-256
 `catalog_snapshot_id` covering both canonical tables. Deterministic content
-identity is therefore available; persisting and enforcing it on feature outputs
-and checkpoints remains Phase 4E work.
+identity is therefore available and persisted in Phase 4E-1 checkpoints;
+runtime and feature-output enforcement remains later Phase 4E work.
 
 > A feature row is produced using one explicit frozen canonical catalog
 > snapshot. At present, “versioned” means its content can be identified
-> deterministically; persisted version enforcement remains Phase 4E work.
+> deterministically; runtime version enforcement remains Phase 4E work.
 
 ## Phase 4E: Checkpoint/replay and full materialization
 
-Phase 4E will persist and restore complete state at explicit exclusive cutoffs,
-replay complete timestamp batches with duplicate-application protection, attach
-and enforce `catalog_snapshot_id`, prove uninterrupted/replay equivalence and
-event conservation, and materialize all 17 v1 predictors from canonical Parquet
-inputs with reproducible provenance metadata. Serialization formats, checkpoint
-cadence, storage layout, and command shape remain implementation choices.
+Phase 4E-1 provides a strict schema-versioned JSON checkpoint around complete
+Phase 4A-C dynamic state. Its `checkpointCutoff` is exclusive: a cutoff `c`
+contains exactly events with timestamps `< c`, never events at `c`. Every
+artifact includes the frozen catalog's lowercase SHA-256 `catalogSnapshotId`;
+timestamps round-trip at nanosecond precision; restore validates state before it
+becomes mutable; and file publication uses atomic replacement. Static Phase 4D
+feature values are not copied per event because they resolve from that catalog
+snapshot.
+
+`CheckpointHistorySession` owns the validated canonical event frame, its
+deterministic source identity, indivisible timestamp batches, and the ordered
+processing cursor. It publishes a checkpoint only when that cursor is exactly
+the complete source prefix before the requested cutoff. Every consumed batch
+requires an explicit movie-genre bridge; bare state and low-level/manual updates
+cannot establish checkpoint eligibility. Checkpoints carry the history source
+SHA-256 plus total and processed progress counts. Trusted source validation
+accepts only MovieLens half-star ratings from `0.5` through `5.0`.
+Phase 4E-1 validates the format and internal consistency of that persisted
+provenance; Phase 4E-2 will compare it with the actual canonical source during
+resume and replay.
+
+A rolling expiration watermark plus expired-event count prevents publication
+after over-expiration and detects missing retained activity. Persisted
+timestamps have the exact naïve form
+`YYYY-MM-DDTHH:MM:SS.fffffffff`.
+
+Later Phase 4E work will replay complete timestamp batches with
+duplicate-application protection, enforce catalog identity against supplied
+runtime inputs, prove uninterrupted/replay equivalence and event conservation,
+and materialize all 17 v1 predictors from canonical Parquet inputs with
+reproducible provenance metadata.
 
 It does not add new predictors or external enrichment, and it does not include
 modeling, final temporal splits, serving APIs, or feature-store infrastructure.
