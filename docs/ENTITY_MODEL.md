@@ -168,9 +168,8 @@ Each source event may be applied at most once to each affected state key. The
 idempotency/provenance identity is `(state table, entity key, ratingEventId)`.
 For multi-valued relationships, one event legitimately has one such identity
 per related key. Retry or replay logic must prevent a second application of the
-same identity. Serializable state primitives now exist, but operational
-duplicate-application enforcement, checkpoint/replay orchestration, persisted
-cutoff metadata, and physical checkpoint cadence remain Phase 4E work.
+same identity. Phase 4E adds operational duplicate-application enforcement,
+checkpoint/replay orchestration, and persisted cutoff metadata.
 
 ## Cold start and invariants
 
@@ -200,8 +199,8 @@ timestamp exclusion;
   `movies` and `movie_genre`; historical availability cannot be proven and this
   limitation must be disclosed. Genome data remains deferred.
 - Phase 4D provides a deterministic, order-invariant SHA-256
-  `catalog_snapshot_id` for canonical `movies` plus `movie_genre`. Persisting and
-  enforcing it on checkpoints and feature outputs remains Phase 4E work.
+  `catalog_snapshot_id` for canonical `movies` plus `movie_genre`. Phase 4E
+  persists and enforces it on checkpoints and feature outputs.
 - Release year is embedded in most titles, not supplied as a dedicated field;
   parsing is conservative and missing when the pattern is ambiguous or is
   `(0000)`, which is not a valid Gregorian calendar year.

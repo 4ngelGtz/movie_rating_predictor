@@ -146,6 +146,43 @@ def _canonical_batches_and_source_id(
     rating_events: pd.DataFrame,
 ) -> tuple[tuple[CanonicalTimestampBatch, ...], str]:
     """Validate and canonically identify one complete rating-history source."""
+    source_id = canonical_history_source_id(rating_events)
+    required = ("ratingEventId", "userId", "movieId", "rating", "timestamp")
+    ordered = rating_events.loc[:, list(required)].sort_values(
+        ["timestamp", "ratingEventId"], kind="stable"
+    )
+
+    batches: list[CanonicalTimestampBatch] = []
+    for ordinal, (timestamp, group) in enumerate(
+        ordered.groupby("timestamp", sort=False)
+    ):
+        batch_ratings = tuple(
+            (int(row.userId), int(row.movieId), float(row.rating))
+            for row in group[["userId", "movieId", "rating"]].itertuples(
+                index=False
+            )
+        )
+        batch_event_ids = tuple(int(value) for value in group["ratingEventId"])
+        batches.append(
+            CanonicalTimestampBatch(
+                history_source_id=source_id,
+                ordinal=ordinal,
+                timestamp=pd.Timestamp(timestamp),
+                ratings=batch_ratings,
+                rating_event_ids=batch_event_ids,
+                _token=_CANONICAL_BATCH_TOKEN,
+            )
+        )
+    return tuple(batches), source_id
+
+
+def canonical_history_source_id(rating_events: pd.DataFrame) -> str:
+    """Validate and hash canonical history without retaining replay batches.
+
+    The incremental encoding is byte-for-byte identical to the checkpoint
+    history identity, but avoids constructing a second full-history Python
+    object graph during feature materialization.
+    """
     if not isinstance(rating_events, pd.DataFrame):
         raise TypeError("rating_events must be a pandas DataFrame")
     required = ("ratingEventId", "userId", "movieId", "rating", "timestamp")
@@ -190,47 +227,31 @@ def _canonical_batches_and_source_id(
     ordered = rating_events.loc[:, list(required)].sort_values(
         ["timestamp", "ratingEventId"], kind="stable"
     )
-    source_rows = [
-        {
+    digest = hashlib.sha256()
+    digest.update(b'{"events":[')
+    for position, row in enumerate(ordered.itertuples(index=False)):
+        if position:
+            digest.update(b",")
+        source_row = {
             "ratingEventId": int(row.ratingEventId),
             "userId": int(row.userId),
             "movieId": int(row.movieId),
             "rating": float(row.rating),
             "timestamp": timestamp_to_string(pd.Timestamp(row.timestamp)),
         }
-        for row in ordered.itertuples(index=False)
-    ]
-    source_content = json.dumps(
-        {"version": _HISTORY_ID_VERSION, "events": source_rows},
-        ensure_ascii=False,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    source_id = hashlib.sha256(source_content).hexdigest()
-
-    batches: list[CanonicalTimestampBatch] = []
-    for ordinal, (timestamp, group) in enumerate(
-        ordered.groupby("timestamp", sort=False)
-    ):
-        batch_ratings = tuple(
-            (int(row.userId), int(row.movieId), float(row.rating))
-            for row in group[["userId", "movieId", "rating"]].itertuples(
-                index=False
-            )
+        digest.update(
+            json.dumps(
+                source_row,
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
         )
-        batch_event_ids = tuple(int(value) for value in group["ratingEventId"])
-        batches.append(
-            CanonicalTimestampBatch(
-                history_source_id=source_id,
-                ordinal=ordinal,
-                timestamp=pd.Timestamp(timestamp),
-                ratings=batch_ratings,
-                rating_event_ids=batch_event_ids,
-                _token=_CANONICAL_BATCH_TOKEN,
-            )
-        )
-    return tuple(batches), source_id
+    digest.update(b'],"version":')
+    digest.update(json.dumps(_HISTORY_ID_VERSION).encode("utf-8"))
+    digest.update(b"}")
+    return digest.hexdigest()
 
 
 def _batch_event_frame(batch: CanonicalTimestampBatch) -> pd.DataFrame:

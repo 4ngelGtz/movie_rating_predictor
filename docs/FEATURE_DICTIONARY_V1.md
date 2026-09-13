@@ -77,9 +77,9 @@ the same catalog snapshot, but historical availability cannot be proven from
 the source. Results using genre/year features must disclose this limitation and
 should be compared with a dynamic-history-only baseline.
 
-In the current implementation, “versioned” means that Phase 4D can compute a
-deterministic content identity. Persisting and enforcing that identity is Phase
-4E work.
+In the current implementation, “versioned” means that Phase 4D computes a
+deterministic content identity and Phase 4E persists and enforces it in
+checkpoint and materialized-feature metadata.
 
 `releaseYear` is the conservative terminal-title parse defined in Phase 2. It
 is not a release date. The terminal token `(0000)` is missing because the
@@ -183,13 +183,13 @@ because they let the model distinguish evidence from fallback values.
   state; the 30-day count additionally requires timestamped eviction state.
   Genre and year features require the identical versioned catalog snapshot.
 
-## 6. Catalog identity and remaining provenance work
+## 6. Catalog identity and persisted provenance
 
 The feature semantics are closed. Phase 4D added deterministic, order-invariant
 SHA-256 `catalog_snapshot_id` generation over canonical `movies` plus
-`movie_genre`. Phase 4E must persist and enforce that identity on feature
-outputs and checkpoints so offline and online code can prove that they used the
-same frozen static snapshot.
+`movie_genre`. Phase 4E persists and enforces that identity on feature outputs
+and checkpoints so offline and online code can prove that they used the same
+frozen static snapshot.
 
 ## 7. Phase 4 implementation order
 

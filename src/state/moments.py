@@ -138,6 +138,21 @@ class RunningMoments:
         self.mean += delta * other.count / combined_count
         self.count = combined_count
 
+    def add(self, value: float) -> None:
+        """Add one finite observation without allocating batch state."""
+        value = float(value)
+        if not math.isfinite(value):
+            raise ValueError("moment values must be finite")
+        if self.count == 0:
+            self.count = 1
+            self.mean = value
+            return
+        combined_count = self.count + 1
+        delta = value - self.mean
+        self.M2 += delta * delta * self.count / combined_count
+        self.mean += delta / combined_count
+        self.count = combined_count
+
     @property
     def population_variance(self) -> float:
         """Return ``M2 / N``; empty and singleton states resolve to zero."""
@@ -309,14 +324,6 @@ class HistoricalRatingState:
         timestamp: Any | None,
         movie_genres: Mapping[int, tuple[str, ...]] | None,
     ) -> None:
-        if movie_genres is not None:
-            for movie_id, genre_ids in movie_genres.items():
-                if len(genre_ids) != len(set(genre_ids)):
-                    raise ValueError(
-                        "movie_genres memberships must be distinct for each movie; "
-                        f"duplicate found for movieId {movie_id}"
-                    )
-
         batch = [
             (int(user_id), int(movie_id), float(rating))
             for user_id, movie_id, rating in ratings
@@ -333,6 +340,35 @@ class HistoricalRatingState:
                 "timestamp batches must be complete and strictly increasing; "
                 "a timestamp cannot be applied in multiple partial batches"
             )
+        if movie_genres is not None:
+            for movie_id in {movie_id for _, movie_id, _ in batch}:
+                genre_ids = movie_genres.get(movie_id, ())
+                if len(genre_ids) != len(set(genre_ids)):
+                    raise ValueError(
+                        "movie_genres memberships must be distinct for each movie; "
+                        f"duplicate found for movieId {movie_id}"
+                    )
+
+        if len(batch) == 1:
+            user_id, movie_id, rating = batch[0]
+            genres = movie_genres.get(movie_id, ()) if movie_genres is not None else ()
+            self.global_moments.add(rating)
+            self.user_moments.setdefault(user_id, RunningMoments()).add(rating)
+            self.movie_moments.setdefault(movie_id, RunningMoments()).add(rating)
+            for genre_id in genres:
+                self.user_genre_moments.setdefault(
+                    (user_id, genre_id), RunningMoments()
+                ).add(rating)
+            if batch_timestamp is not None:
+                self.last_user_rating[user_id] = batch_timestamp
+                self._movie_rating_batches_30d.append(
+                    (batch_timestamp, ((movie_id, 1),))
+                )
+                self.movie_rating_count_30d[movie_id] = (
+                    self.movie_rating_count_30d.get(movie_id, 0) + 1
+                )
+                self._latest_applied_timestamp = batch_timestamp
+            return
 
         self.global_moments.merge(
             RunningMoments.from_values(rating for _, _, rating in batch)

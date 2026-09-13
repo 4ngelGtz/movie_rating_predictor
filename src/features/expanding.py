@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import datetime
 import math
 
@@ -231,6 +232,101 @@ def _resolve_timestamp_batch_features(
         for column, value in zip(STATIC_FEATURE_COLUMNS, static, strict=True):
             values[column][position] = value
     return _feature_frame(batch_events, values)
+
+
+def iter_expanding_rating_features(
+    rating_events: pd.DataFrame,
+    movie_genres: pd.DataFrame,
+    canonical_movies: pd.DataFrame,
+    *,
+    chunk_size: int = 250_000,
+) -> Iterator[pd.DataFrame]:
+    """Yield complete v1 feature rows in chronological, bounded-memory chunks.
+
+    Chunk boundaries are extended through timestamp ties so every simultaneous
+    batch is scored and applied as one indivisible unit.
+    """
+    if isinstance(chunk_size, bool) or not isinstance(chunk_size, int):
+        raise TypeError("chunk_size must be an integer")
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+    _validate_rating_events(rating_events)
+    catalog = build_catalog_lookups(
+        canonical_movies,
+        movie_genres,
+        required_movie_ids=rating_events["movieId"],
+    )
+    event_count = len(rating_events)
+    if event_count == 0:
+        yield _feature_frame(rating_events, _empty_feature_values(0))
+        return
+
+    timestamp_values = rating_events["timestamp"].to_numpy(copy=False)
+    order = np.argsort(timestamp_values, kind="stable")
+    ordered_timestamps = timestamp_values[order]
+    state = HistoricalRatingState()
+    start = 0
+    while start < event_count:
+        end = min(start + chunk_size, event_count)
+        while (
+            end < event_count
+            and ordered_timestamps[end] == ordered_timestamps[end - 1]
+        ):
+            end += 1
+
+        positions = order[start:end]
+        chunk_events = rating_events.iloc[positions].loc[
+            :, (*CONTEXT_COLUMNS, "rating")
+        ].reset_index(drop=True)
+        values = _empty_feature_values(len(chunk_events))
+        chunk_timestamps = chunk_events["timestamp"].to_numpy(copy=False)
+        user_ids = chunk_events["userId"].to_numpy(copy=False)
+        movie_ids = chunk_events["movieId"].to_numpy(copy=False)
+        ratings = chunk_events["rating"].to_numpy(copy=False)
+        boundaries = np.flatnonzero(
+            chunk_timestamps[1:] != chunk_timestamps[:-1]
+        ) + 1
+        batch_starts = np.concatenate(([0], boundaries))
+        batch_ends = np.concatenate((boundaries, [len(chunk_events)]))
+
+        for batch_start, batch_end in zip(batch_starts, batch_ends, strict=True):
+            timestamp = pd.Timestamp(chunk_timestamps[batch_start])
+            state.expire_movie_activity(timestamp)
+            for position in range(int(batch_start), int(batch_end)):
+                user_id = int(user_ids[position])
+                movie_id = int(movie_ids[position])
+                dynamic = _resolved_features(
+                    state,
+                    user_id,
+                    movie_id,
+                    timestamp,
+                    catalog.genres_by_movie,
+                )
+                static = _resolved_static_features(movie_id, timestamp, catalog)
+                for column, value in zip(
+                    DYNAMIC_FEATURE_COLUMNS, dynamic, strict=True
+                ):
+                    values[column][position] = value
+                for column, value in zip(
+                    STATIC_FEATURE_COLUMNS, static, strict=True
+                ):
+                    values[column][position] = value
+
+            state.apply_timestamp_batch(
+                (
+                    (
+                        int(user_ids[position]),
+                        int(movie_ids[position]),
+                        float(ratings[position]),
+                    )
+                    for position in range(int(batch_start), int(batch_end))
+                ),
+                timestamp=timestamp,
+                movie_genres=catalog.genres_by_movie,
+            )
+
+        yield _feature_frame(chunk_events, values)
+        start = end
 
 
 def build_expanding_rating_features(
