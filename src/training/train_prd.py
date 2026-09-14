@@ -1,4 +1,8 @@
-"""Reproduce the canonical 25-feature PRD model without training Model A."""
+"""Historical CLI: reproduce the 25-feature PRD model without training Model A.
+
+Notebooks are the primary training interface. This module is an optional
+auditor reproduction path and writes outside the immutable evidence directory.
+"""
 
 from __future__ import annotations
 

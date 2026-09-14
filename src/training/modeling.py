@@ -1,4 +1,10 @@
-"""Shared, contract-enforcing model training and evaluation utilities."""
+"""Scoring helpers and optional historical training reproduction.
+
+Notebooks are the primary training and evaluation workflow. This module
+enforces the PRD feature contract for scoring, hashes artifacts, validates
+v2 feature inputs, and retains ``run_model`` for optional CLI reproduction
+of historical experiment evidence. It is not a training framework.
+"""
 
 from __future__ import annotations
 

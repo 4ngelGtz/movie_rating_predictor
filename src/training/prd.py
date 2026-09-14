@@ -12,7 +12,7 @@ from src.training import prd_config
 from src.training.modeling import predict_prd, sha256_file, validate_ratings_source
 
 
-PRD_MODEL_MANIFEST = prd_config.ROOT / "models/prd_model_manifest.json"
+PRD_MODEL_MANIFEST = prd_config.PRD_MODEL_MANIFEST_PATH
 
 
 def load_prd_manifest(path: Path = PRD_MODEL_MANIFEST) -> dict[str, Any]:
@@ -29,22 +29,34 @@ def load_prd_model(manifest: dict[str, Any] | None = None) -> XGBClassifier:
 
 
 def _validate_provenance(value: dict[str, Any]) -> None:
-    provenance = value.get("provenance", {})
-    expected = {
-        "feature_implementation_base_commit": (
-            prd_config.FEATURE_IMPLEMENTATION_BASE_COMMIT
-        ),
-        "experiment_code_status_at_artifact_creation": "uncommitted",
-        "artifact_provenance": (
-            "The feature implementation is committed at the base commit, but the "
-            "experiment runner was uncommitted when this artifact was created; the "
-            "artifact cannot be cryptographically tied to one complete committed "
-            "source revision."
-        ),
-        "promotion_commit": None,
-    }
-    if provenance != expected or "source_commit" in value:
+    if (
+        value.get("provenance") != prd_config.historical_artifact_provenance()
+        or "source_commit" in value
+    ):
         raise ValueError("PRD artifact provenance is incomplete or overstated")
+
+
+def _validate_temporal_robustness(
+    evaluation: dict[str, Any],
+    comparison: dict[str, Any],
+    historical_name: str,
+) -> None:
+    """Validate the manifest claim using the shared quarterly contract."""
+    robustness = prd_config.quarterly_robustness_contract(comparison)
+    if not robustness["all_configured_quarters_improved"]:
+        configured = robustness["configured_quarter_count"]
+        improved = robustness["improved_quarter_count"]
+        raise ValueError(
+            f"PRD candidate improved every required metric in {improved} of "
+            f"{configured} configured test quarters"
+        )
+    expected_claim = prd_config.quarterly_robustness_claim(
+        comparison, historical_name
+    )
+    if evaluation["temporal_robustness"] != expected_claim:
+        raise ValueError(
+            "PRD temporal robustness claim differs from comparison evidence"
+        )
 
 
 def validate_prd_manifest(
@@ -190,18 +202,9 @@ def validate_prd_manifest(
     )
     if comparison["model_b"]["metrics"]["test"] != test_metrics:
         raise ValueError("comparison and candidate test metrics differ")
-    quarter_deltas = comparison["test_quarter_absolute_deltas_model_b_minus_a"]
-    expected_quarters = {"2014Q1", "2014Q2", "2014Q3", "2014Q4", "2015Q1"}
-    if set(quarter_deltas) != expected_quarters:
-        raise ValueError("comparison does not cover the expected test quarters")
-    for quarter, deltas in quarter_deltas.items():
-        if not (
-            deltas["PR-AUC"] > 0
-            and deltas["ROC-AUC"] > 0
-            and deltas["Log Loss"] < 0
-            and deltas["Brier"] < 0
-        ):
-            raise ValueError(f"PRD candidate did not improve every metric in {quarter}")
+    _validate_temporal_robustness(
+        evaluation, comparison, value["historical_baseline"]["name"]
+    )
 
     for key in ("model", "metadata", "evaluation", "error_analysis"):
         relative_path = value["historical_baseline"][key]

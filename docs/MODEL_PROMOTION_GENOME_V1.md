@@ -100,10 +100,17 @@ training:
 
 ```bash
 .venv/bin/python -m src.training.prd
+.venv/bin/python -m src.training.build_prd_manifest --check
 ```
 
+`--check` regenerates technical metadata in memory from the frozen artifacts
+and canonical config. It does not choose a model or overwrite the pointer.
+Promotion remains a human decision; `status = "PRD"` is emitted only when
+explicitly requested.
+
 Reproduce only the promoted model and its full evaluation, without first
-training the historical baseline:
+training the historical baseline. This is an optional historical CLI;
+notebooks remain the primary training interface:
 
 ```bash
 .venv/bin/python -m src.training.train_prd

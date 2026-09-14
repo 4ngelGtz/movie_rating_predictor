@@ -1,1 +1,1 @@
-"""Training dataset and temporal validation utilities."""
+"""PRD contract, manifest generation, and validation. Notebooks own training."""

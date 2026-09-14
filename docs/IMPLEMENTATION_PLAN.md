@@ -75,11 +75,12 @@ under the same target, splits, parameters, seed, early-stopping rule, missing
 handling, and evaluation protocol. The Genome candidate was promoted as
 `xgboost_genome_prd_v1` after consistent pooled and quarterly improvements.
 
-The resulting architecture separates the executable contract
-(`prd_config.py`), reusable model utilities (`modeling.py`), canonical
-reproduction (`train_prd.py`), historical comparison (`compare_genome.py`), and
-manifest/artifact validation (`prd.py`). The original baseline and controlled
-comparison evidence remain frozen.
+The resulting architecture is notebook-first: notebooks own training and
+evaluation; `prd_config.py` holds the executable contract;
+`build_prd_manifest.py` derives technical metadata from saved artifacts;
+`prd.py` validates the generated pointer; and `train_prd.py` /
+`compare_genome.py` remain optional historical reproduction CLIs. The original
+baseline and controlled comparison evidence remain frozen.
 
 ## Planned work
 
@@ -117,6 +118,10 @@ cold-start, replay, failure, and update behavior.
   the existing predictor dtype contract.
 - **Future hardening:** optionally add golden provenance digest regressions for
   canonical fixtures and artifacts.
+- Future notebook experiment runs may write a small `run_manifest.json` beside
+  result artifacts (experiment name, feature artifact path/size, training
+  runtimes, notes). Do not modify the immutable
+  `models/genome_experiment_v1/run_manifest.json`.
 - Add TMDb director/actor enrichment only after stable source-qualified person
   IDs and snapshot availability semantics exist.
 - Evaluate tag features, raw Genome dimensions, embeddings, collaborative

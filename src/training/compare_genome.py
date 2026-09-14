@@ -1,4 +1,9 @@
-"""Reproduce the controlled 17-vs-25 predictor Genome experiment safely."""
+"""Historical CLI: reproduce the controlled 17-vs-25 Genome experiment.
+
+Notebooks are the primary training interface. This module regenerates the
+comparison outside ``models/genome_experiment_v1/`` unless an overwrite is
+explicitly requested.
+"""
 
 from __future__ import annotations
 
