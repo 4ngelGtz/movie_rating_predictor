@@ -1,0 +1,31 @@
+{
+  "random_seed": 42,
+  "boundary_convention": "start inclusive, end exclusive",
+  "feature_contract_version": "FEATURE_DICTIONARY_V1",
+  "splits": {
+    "train": {
+      "start_inclusive": null,
+      "end_exclusive": "2012-01-01T00:00:00",
+      "actual_min_timestamp": "1995-01-09T11:46:44",
+      "actual_max_timestamp": "2011-12-31T23:59:55",
+      "rows": 17822773,
+      "prevalence": 0.498194136232336
+    },
+    "validation": {
+      "start_inclusive": "2012-01-01T00:00:00",
+      "end_exclusive": "2014-01-01T00:00:00",
+      "actual_min_timestamp": "2012-01-01T00:00:40",
+      "actual_max_timestamp": "2013-12-31T23:59:59",
+      "rows": 1330716,
+      "prevalence": 0.5195391052636326
+    },
+    "test": {
+      "start_inclusive": "2014-01-01T00:00:00",
+      "end_exclusive": null,
+      "actual_min_timestamp": "2014-01-01T00:00:04",
+      "actual_max_timestamp": "2015-03-31T06:40:02",
+      "rows": 846774,
+      "prevalence": 0.5017277337282439
+    }
+  }
+}

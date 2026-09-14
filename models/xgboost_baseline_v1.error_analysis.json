@@ -1,0 +1,201 @@
+{
+  "user_maturity": [
+    {
+      "Cohort": "high (100+)",
+      "Rows": 493433,
+      "Prevalence": 0.4217654677,
+      "ROC-AUC": 0.7976465196,
+      "PR-AUC": 0.7297243836,
+      "Log Loss": 0.5358397961,
+      "Average Prediction": 0.43723768
+    },
+    {
+      "Cohort": "medium (10-99)",
+      "Rows": 298589,
+      "Prevalence": 0.6281979577,
+      "ROC-AUC": 0.7583589562,
+      "PR-AUC": 0.8255992369,
+      "Log Loss": 0.5626991391,
+      "Average Prediction": 0.6784411669
+    },
+    {
+      "Cohort": "new (0)",
+      "Rows": 5477,
+      "Prevalence": 0.5720284827,
+      "ROC-AUC": 0.7771485203,
+      "PR-AUC": 0.8005306971,
+      "Log Loss": 0.5674812794,
+      "Average Prediction": 0.5174682736
+    },
+    {
+      "Cohort": "low (1-9)",
+      "Rows": 49275,
+      "Prevalence": 0.5282800609,
+      "ROC-AUC": 0.7539268,
+      "PR-AUC": 0.7623486948,
+      "Log Loss": 0.5956680775,
+      "Average Prediction": 0.5514588356
+    }
+  ],
+  "movie_maturity": [
+    {
+      "Cohort": "high (200+)",
+      "Rows": 756792,
+      "Prevalence": 0.5167311494,
+      "ROC-AUC": 0.7913192141,
+      "PR-AUC": 0.7855206457,
+      "Log Loss": 0.5528944731,
+      "Average Prediction": 0.5464995503
+    },
+    {
+      "Cohort": "medium (20-199)",
+      "Rows": 61759,
+      "Prevalence": 0.3963794751,
+      "ROC-AUC": 0.8113268718,
+      "PR-AUC": 0.728931607,
+      "Log Loss": 0.514411509,
+      "Average Prediction": 0.402753979
+    },
+    {
+      "Cohort": "low (1-19)",
+      "Rows": 23489,
+      "Prevalence": 0.346758057,
+      "ROC-AUC": 0.7778217379,
+      "PR-AUC": 0.6396058315,
+      "Log Loss": 0.530152142,
+      "Average Prediction": 0.3593476415
+    },
+    {
+      "Cohort": "new (0)",
+      "Rows": 4734,
+      "Prevalence": 0.2465145754,
+      "ROC-AUC": 0.778899889,
+      "PR-AUC": 0.5265017531,
+      "Log Loss": 0.4706446528,
+      "Average Prediction": 0.301869005
+    }
+  ],
+  "cold_start": [
+    {
+      "Cohort": "established user/movie",
+      "Rows": 836567,
+      "Prevalence": 0.5027092869,
+      "ROC-AUC": 0.7950128058,
+      "PR-AUC": 0.7803647126,
+      "Log Loss": 0.5493191481,
+      "Average Prediction": 0.5308220387
+    },
+    {
+      "Cohort": "cold user only",
+      "Rows": 5473,
+      "Prevalence": 0.5724465558,
+      "ROC-AUC": 0.7771085849,
+      "PR-AUC": 0.8006581661,
+      "Log Loss": 0.5675409436,
+      "Average Prediction": 0.5175652504
+    },
+    {
+      "Cohort": "cold movie only",
+      "Rows": 4730,
+      "Prevalence": 0.2467230444,
+      "ROC-AUC": 0.7790711014,
+      "PR-AUC": 0.5267560455,
+      "Log Loss": 0.4706317782,
+      "Average Prediction": 0.3017989099
+    },
+    {
+      "Cohort": "both cold",
+      "Rows": 4,
+      "Prevalence": 0.0,
+      "ROC-AUC": null,
+      "PR-AUC": 0.0,
+      "Log Loss": 0.4858467579,
+      "Average Prediction": 0.3847686052
+    }
+  ],
+  "genre_support": [
+    {
+      "Cohort": "medium (10-99)",
+      "Rows": 326380,
+      "Prevalence": 0.6059347999,
+      "ROC-AUC": 0.7670992283,
+      "PR-AUC": 0.8189840485,
+      "Log Loss": 0.5622767806,
+      "Average Prediction": 0.6530069113
+    },
+    {
+      "Cohort": "high (100+)",
+      "Rows": 431971,
+      "Prevalence": 0.412590197,
+      "ROC-AUC": 0.7993331426,
+      "PR-AUC": 0.7248476502,
+      "Log Loss": 0.5319357514,
+      "Average Prediction": 0.4263561666
+    },
+    {
+      "Cohort": "low (1-9)",
+      "Rows": 76040,
+      "Prevalence": 0.5554182009,
+      "ROC-AUC": 0.7620628615,
+      "PR-AUC": 0.7857119257,
+      "Log Loss": 0.5820731521,
+      "Average Prediction": 0.5857952237
+    },
+    {
+      "Cohort": "none (0)",
+      "Rows": 12383,
+      "Prevalence": 0.5349269159,
+      "ROC-AUC": 0.7522652661,
+      "PR-AUC": 0.7487830694,
+      "Log Loss": 0.5910425782,
+      "Average Prediction": 0.5236323476
+    }
+  ],
+  "test_quarter": [
+    {
+      "Cohort": "2014Q1",
+      "Rows": 134320,
+      "Prevalence": 0.5302858845,
+      "ROC-AUC": 0.7990623728,
+      "PR-AUC": 0.8063613935,
+      "Log Loss": 0.5393691063,
+      "Average Prediction": 0.5369425416
+    },
+    {
+      "Cohort": "2014Q2",
+      "Rows": 117973,
+      "Prevalence": 0.5122358506,
+      "ROC-AUC": 0.7952731709,
+      "PR-AUC": 0.792374453,
+      "Log Loss": 0.5466490984,
+      "Average Prediction": 0.5190539956
+    },
+    {
+      "Cohort": "2014Q3",
+      "Rows": 112771,
+      "Prevalence": 0.5296929175,
+      "ROC-AUC": 0.7921521975,
+      "PR-AUC": 0.797983862,
+      "Log Loss": 0.5485242009,
+      "Average Prediction": 0.5393437147
+    },
+    {
+      "Cohort": "2014Q4",
+      "Rows": 197824,
+      "Prevalence": 0.5002679149,
+      "ROC-AUC": 0.793877486,
+      "PR-AUC": 0.7788385407,
+      "Log Loss": 0.5529767275,
+      "Average Prediction": 0.5398288965
+    },
+    {
+      "Cohort": "2015Q1",
+      "Rows": 283886,
+      "Prevalence": 0.4737570715,
+      "ROC-AUC": 0.7969818518,
+      "PR-AUC": 0.7605399401,
+      "Log Loss": 0.5519428849,
+      "Average Prediction": 0.5190814734
+    }
+  ]
+}

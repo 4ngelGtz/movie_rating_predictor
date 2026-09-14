@@ -5,10 +5,11 @@ movie at least 4. Every training feature must use only information available
 strictly before the rating event and must be reproducible by the future online
 serving path.
 
-No model has been implemented yet. Phase 4 is complete: the production v1
-feature path materializes all 17 contracted predictors with checkpoint/replay
-parity and reproducibility metadata. The existing notebooks contain
-exploratory analysis only.
+Phase 5 is complete. The production v1 feature path materializes all 17
+contracted predictors with checkpoint/replay parity and reproducibility
+metadata, and the numbered Phase 5 notebooks build leakage-safe temporal
+partitions, fit a deterministic XGBoost baseline, and inspect its test-time
+performance, calibration, feature importance, and cohort errors.
 
 ## Setup
 
@@ -28,7 +29,9 @@ movie_rating_predictor/
 │   ├── processed/    # Validated, typed Parquet datasets
 │   └── features/     # Materialized point-in-time feature/state tables
 ├── docs/             # Contracts and implementation plan
-├── notebooks/        # Exploration and validation, not production logic
+├── notebooks/
+│   ├── *.ipynb       # Exploratory analyses
+│   └── model/        # Ordered Phase 5 modeling notebooks
 ├── src/
 │   ├── data/         # Ingestion, schema validation, and Parquet conversion
 │   ├── entities/     # Canonical entity contracts and relational builders
@@ -61,7 +64,7 @@ Generated data is ignored by Git. Keep the MovieLens source files in
 | Phase 4E-2 — Resume/replay and provenance enforcement | COMPLETE |
 | Phase 4E-3 — Uninterrupted/replay equivalence | COMPLETE |
 | Phase 4E-4 — Full feature materialization | COMPLETE |
-| Phase 5 — Training dataset and temporal modeling | NOT STARTED |
+| Phase 5 — Training dataset and temporal modeling | COMPLETE |
 | Phase 6+ — Online state and serving | NOT STARTED |
 
 The current engineering roadmap and Phase 4E contract are in
@@ -234,8 +237,26 @@ ignored by Git.
 
 It does not add new predictors or external enrichment, and it does not include
 modeling, final temporal splits, serving APIs, or feature-store infrastructure.
-After 4E, Phase 5 constructs labeled event-level data, defines temporal splits,
-fits a simple baseline, and evaluates it.
+Phase 5 constructs labeled event-level data, defines temporal splits, fits an
+XGBoost baseline, and evaluates it.
+
+## Phase 5: Training dataset and temporal modeling
+
+Run the numbered notebooks in order:
+
+```text
+notebooks/model/01_training_dataset.ipynb
+notebooks/model/02_temporal_splits.ipynb
+notebooks/model/03_xgboost_baseline.ipynb
+notebooks/model/04_model_evaluation.ipynb
+notebooks/model/05_error_analysis.ipynb
+```
+
+They join the canonical outcome by `ratingEventId`, retain exactly the 17 Phase
+4 predictors, use half-open calendar splits (train before 2012, validation in
+2012–2013, and test from 2014 onward), and persist only lightweight split,
+model, evaluation, and cohort-analysis artifacts under `models/`. The full
+feature dataset is never duplicated or overwritten.
 
 TMDb director/actor mappings remain a planned extension after the compact
 leakage-safe baseline. They are not required for Feature Dictionary v1 or Phase

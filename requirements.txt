@@ -5,3 +5,5 @@ pytest
 matplotlib
 jupyter
 ipykernel
+xgboost
+scikit-learn

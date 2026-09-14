@@ -1,0 +1,99 @@
+{
+  "metrics": {
+    "train": {
+      "Rows": 17822773.0,
+      "Prevalence": 0.498194136232336,
+      "ROC-AUC": 0.7983139671658235,
+      "PR-AUC": 0.783245929084694,
+      "Log Loss": 0.5416099429130554,
+      "Brier": 0.18288113176822662
+    },
+    "validation": {
+      "Rows": 1330716.0,
+      "Prevalence": 0.5195391052636326,
+      "ROC-AUC": 0.7973115922215582,
+      "PR-AUC": 0.797281300826479,
+      "Log Loss": 0.5427761673927307,
+      "Brier": 0.18309734761714935
+    },
+    "test": {
+      "Rows": 846774.0,
+      "Prevalence": 0.5017277337282439,
+      "ROC-AUC": 0.7952745701492956,
+      "PR-AUC": 0.7799453703397189,
+      "Log Loss": 0.5489970445632935,
+      "Brier": 0.18527650833129883
+    }
+  },
+  "gain_importance": {
+    "movie_mean_rating": 6463.58154296875,
+    "user_target_genre_mean_rating": 5806.7939453125,
+    "user_mean_rating": 697.760009765625,
+    "user_rating_std_pop": 419.2276916503906,
+    "user_rating_count": 264.9411926269531,
+    "movie_rating_std_pop": 264.3923034667969,
+    "global_rating_count": 228.93475341796875,
+    "user_target_genre_rating_count": 217.1555938720703,
+    "movie_rating_count_30d": 212.83370971679688,
+    "movie_release_year": 185.06723022460938,
+    "global_mean_rating": 182.68252563476562,
+    "movie_rating_count": 145.5961151123047,
+    "user_seconds_since_last_rating": 132.76593017578125,
+    "user_target_genre_mean_delta": 113.02687072753906,
+    "movie_genre_count": 98.14793395996094,
+    "movie_age_years": 70.0582275390625,
+    "movie_release_year_missing": 0.0
+  },
+  "calibration_bins": {
+    "(-0.001, 0.1]": {
+      "rows": 67319,
+      "average_prediction": 0.05428285896778107,
+      "observed_prevalence": 0.052511178122075494
+    },
+    "(0.1, 0.2]": {
+      "rows": 72804,
+      "average_prediction": 0.14974144101142883,
+      "observed_prevalence": 0.14942860282402065
+    },
+    "(0.2, 0.3]": {
+      "rows": 74049,
+      "average_prediction": 0.25019463896751404,
+      "observed_prevalence": 0.24848411187186864
+    },
+    "(0.3, 0.4]": {
+      "rows": 75477,
+      "average_prediction": 0.35049551725387573,
+      "observed_prevalence": 0.3422897041482836
+    },
+    "(0.4, 0.5]": {
+      "rows": 80034,
+      "average_prediction": 0.4506899118423462,
+      "observed_prevalence": 0.42401979158857483
+    },
+    "(0.5, 0.6]": {
+      "rows": 89966,
+      "average_prediction": 0.5512656569480896,
+      "observed_prevalence": 0.5182291087744259
+    },
+    "(0.6, 0.7]": {
+      "rows": 101021,
+      "average_prediction": 0.6507604122161865,
+      "observed_prevalence": 0.6104176359370824
+    },
+    "(0.7, 0.8]": {
+      "rows": 111120,
+      "average_prediction": 0.750426173210144,
+      "observed_prevalence": 0.7040856731461483
+    },
+    "(0.8, 0.9]": {
+      "rows": 112926,
+      "average_prediction": 0.8494355082511902,
+      "observed_prevalence": 0.7998866514354533
+    },
+    "(0.9, 1.0]": {
+      "rows": 62058,
+      "average_prediction": 0.9358338713645935,
+      "observed_prevalence": 0.8928905217699571
+    }
+  }
+}

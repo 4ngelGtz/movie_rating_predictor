@@ -201,19 +201,37 @@ Non-blocking follow-ups:
 
 These issues do not affect the correctness of the current 20,000,263-row materialized feature dataset and are deferred until the pipeline is operationalized.
 
-## Phase 5 — Training dataset and temporal modeling — NOT STARTED
+## Phase 5 — Training dataset and temporal modeling — COMPLETE
 
-Use the materialized point-in-time features to build labeled event-level rows,
-choose temporal train/validation/test boundaries, fit a simple baseline, and
-evaluate it. The intended progression is:
+The numbered Phase 5 notebooks use the materialized point-in-time features to
+build labeled event-level rows, choose temporal train/validation/test
+boundaries, fit an XGBoost baseline, and evaluate it. The implemented
+progression is:
+
+```text
+notebooks/model/01_training_dataset.ipynb
+notebooks/model/02_temporal_splits.ipynb
+notebooks/model/03_xgboost_baseline.ipynb
+notebooks/model/04_model_evaluation.ipynb
+notebooks/model/05_error_analysis.ipynb
+```
 
 ```text
 feature materialization
     -> labeled event-level dataset
     -> temporal train/validation/test split
-    -> simple baseline model
-    -> evaluation
+    -> XGBoost baseline model
+    -> evaluation, calibration, and cohort error analysis
 ```
+
+The outcome is joined from canonical ratings by the 1-based source-row
+`ratingEventId`; the predictor allow-list is exactly the 17-feature Phase 4
+contract. Half-open calendar partitions train on timestamps before 2012,
+validate on 2012–2013, and reserve 2014 onward for final testing. The baseline
+uses CPU histogram trees, native missing-value handling, deterministic seed 42,
+and validation early stopping. It achieves 0.7973 validation ROC-AUC and 0.7953
+test ROC-AUC; probability calibration and history/cold-start cohorts are
+measured without changing the Phase 4 feature semantics.
 
 ## Phase 6 — Current online state — NOT STARTED
 
