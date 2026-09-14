@@ -8,7 +8,11 @@ The machine-readable default pointer is
 `models/prd/prd_model_manifest.json`. The original 17-feature model remains the
 historical `phase5_baseline_17` benchmark; none of its artifacts are replaced.
 The complete `models/experiments/genome_experiment_v1/` directory is immutable
-promotion evidence and is not a reproduction output directory.
+promotion evidence and is not a reproduction output directory. The canonical
+notebook workflow under `notebooks/model/genome_prd_v1/` produces a distinct
+model and results artifact under `models/prd/`; the existing manifest continues
+to describe the original promoted experiment artifact until that workflow is
+fully run and its final notebook regenerates the pointer.
 
 This promotion identifies the default project model. It does not claim
 real-world online validation or business lift.
@@ -94,6 +98,14 @@ Generate the 25-feature input artifact:
 ```bash
 .venv/bin/python -m src.features.materialize
 ```
+
+Then execute, in numeric order, the five notebooks in
+`notebooks/model/genome_prd_v1/`. Notebook 03 writes
+`models/prd/xgboost_genome_prd_v1.model.json`, notebook 04 writes the matching
+`.results.json`, and notebook 05 derives, writes, and validates
+`models/prd/prd_model_manifest.json`. The same data, environment, seed, and code
+make the workflow deterministic, but XGBoost serialization is not guaranteed
+to be byte-identical across library or platform versions.
 
 Validate the canonical PRD manifest and local feature metadata without
 training:

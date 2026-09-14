@@ -96,7 +96,10 @@ IMMUTABLE_EXPERIMENT_EVIDENCE_DIR = (
     ROOT / "models/experiments/genome_experiment_v1"
 )
 PHASE5_HISTORICAL_EVIDENCE_DIR = ROOT / "models/history/phase5"
-PRD_ARTIFACT_PATH = (
+PRD_OUTPUT_DIR = ROOT / "models/prd"
+PRD_ARTIFACT_PATH = PRD_OUTPUT_DIR / f"{PRD_MODEL_NAME}.model.json"
+PRD_RESULTS_PATH = PRD_OUTPUT_DIR / f"{PRD_MODEL_NAME}.results.json"
+EXPERIMENT_CANDIDATE_ARTIFACT_PATH = (
     IMMUTABLE_EXPERIMENT_EVIDENCE_DIR / "model_b_genome_25.model.json"
 )
 IMMUTABLE_HISTORICAL_EVIDENCE_DIRS = (
@@ -113,6 +116,7 @@ PRD_BASELINE_RESULTS_PATH = (
 PRD_V2_VALIDATION_PATH = IMMUTABLE_EXPERIMENT_EVIDENCE_DIR / "v2_validation.json"
 PRD_RUN_MANIFEST_PATH = IMMUTABLE_EXPERIMENT_EVIDENCE_DIR / "run_manifest.json"
 PRD_MODEL_MANIFEST_PATH = ROOT / "models/prd/prd_model_manifest.json"
+PRD_NOTEBOOK_WORKFLOW = "notebooks/model/genome_prd_v1"
 DEFAULT_COMPARISON_REPRODUCTION_DIR = (
     ROOT / "models/experiments/genome_experiment_reproduction_v1"
 )
@@ -173,6 +177,24 @@ def historical_artifact_provenance() -> dict[str, object]:
         "feature_implementation_base_commit": FEATURE_IMPLEMENTATION_BASE_COMMIT,
         "experiment_code_status_at_artifact_creation": "uncommitted",
         "artifact_provenance": ARTIFACT_PROVENANCE_STATEMENT,
+        "promotion_commit": None,
+    }
+
+
+def notebook_artifact_provenance() -> dict[str, object]:
+    """Return provenance for an artifact trained by the canonical notebooks."""
+    return {
+        "artifact_origin": "canonical notebook workflow",
+        "notebook_workflow": PRD_NOTEBOOK_WORKFLOW,
+        "source_revision": None,
+        "source_experiment": (
+            IMMUTABLE_EXPERIMENT_EVIDENCE_DIR.relative_to(ROOT).as_posix()
+        ),
+        "reproducibility_note": (
+            "Deterministic for the same data, environment, seed, and code; "
+            "XGBoost serialization is not guaranteed byte-identical across "
+            "library or platform versions."
+        ),
         "promotion_commit": None,
     }
 

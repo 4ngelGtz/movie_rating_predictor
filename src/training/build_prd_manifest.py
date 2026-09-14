@@ -16,10 +16,10 @@ Intended final notebook cell::
 
     manifest = build_prd_manifest(
         model_path=Path(
-            "models/experiments/genome_experiment_v1/model_b_genome_25.model.json"
+            "models/prd/xgboost_genome_prd_v1.model.json"
         ),
         results_path=Path(
-            "models/experiments/genome_experiment_v1/model_b_genome_25.results.json"
+            "models/prd/xgboost_genome_prd_v1.results.json"
         ),
         comparison_path=Path(
             "models/experiments/genome_experiment_v1/comparison.json"
@@ -47,7 +47,7 @@ from src.training import prd_config
 from src.training.modeling import sha256_file
 
 
-MANIFEST_SCHEMA_VERSION = 2
+MANIFEST_SCHEMA_VERSION = 3
 CANDIDATE_STATUS = "CANDIDATE"
 PROMOTED_STATUS = "PRD"
 COMPACT_JSON_MAX_WIDTH = 64
@@ -192,7 +192,7 @@ def _temporal_robustness(comparison: dict[str, Any], historical_name: str) -> st
 def _source_experiment(
     *,
     comparison_path: Path,
-    results_path: Path,
+    candidate_results_path: Path,
     baseline_results_path: Path,
     v2_validation_path: Path,
     run_manifest_path: Path,
@@ -200,7 +200,7 @@ def _source_experiment(
 ) -> dict[str, str]:
     files = {
         "comparison": comparison_path,
-        "candidate_results": results_path,
+        "candidate_results": candidate_results_path,
         "baseline_results": baseline_results_path,
         "v2_validation": v2_validation_path,
         "run_manifest": run_manifest_path,
@@ -218,7 +218,6 @@ def _validate_candidate_consistency(
     *,
     model_facts: dict[str, Any],
     results: dict[str, Any],
-    comparison: dict[str, Any],
     contract: dict[str, Any],
 ) -> None:
     if results["feature_columns"] != contract["predictor_names"]:
@@ -239,8 +238,6 @@ def _validate_candidate_consistency(
         raise ValueError(
             "candidate results tree count does not match the model artifact"
         )
-    if comparison["model_b"]["metrics"]["test"] != results["metrics"]["test"]:
-        raise ValueError("comparison and candidate test metrics differ")
 
 
 def _mismatch_paths(left: Any, right: Any, prefix: str = "") -> list[str]:
@@ -290,6 +287,7 @@ def build_prd_manifest(
     baseline_results_path: Path | None = None,
     v2_validation_path: Path | None = None,
     run_manifest_path: Path | None = None,
+    experiment_candidate_results_path: Path | None = None,
     historical_baseline: dict[str, str] | None = None,
     root: Path = prd_config.ROOT,
 ) -> dict[str, Any]:
@@ -317,6 +315,10 @@ def build_prd_manifest(
     run_manifest_path = (
         run_manifest_path or experiment_dir / "run_manifest.json"
     )
+    experiment_candidate_results_path = (
+        experiment_candidate_results_path
+        or experiment_dir / "model_b_genome_25.results.json"
+    )
     historical_baseline = dict(
         historical_baseline or prd_config.PHASE5_HISTORICAL_BASELINE
     )
@@ -330,19 +332,27 @@ def build_prd_manifest(
     _validate_candidate_consistency(
         model_facts=model_facts,
         results=results,
-        comparison=comparison,
         contract=contract,
     )
 
+    is_notebook_artifact = (
+        model_path.resolve() == prd_config.PRD_ARTIFACT_PATH.resolve()
+    )
+    provenance = (
+        prd_config.notebook_artifact_provenance()
+        if is_notebook_artifact
+        else prd_config.historical_artifact_provenance()
+    )
+
     return {
-        "schema_version": MANIFEST_SCHEMA_VERSION,
+        "schema_version": MANIFEST_SCHEMA_VERSION if is_notebook_artifact else 2,
         "model_name": identity["model_name"],
         "model_version": identity["model_version"],
         "canonical_name": identity["canonical_name"],
         "status": status,
         "promotion_date": promotion_date if promote else None,
         "validation_scope": validation_scope,
-        "provenance": prd_config.historical_artifact_provenance(),
+        "provenance": provenance,
         "artifact": {
             "path": _relative_path(model_path, root),
             "sha256": model_facts["sha256"],
@@ -351,6 +361,16 @@ def build_prd_manifest(
             "input_contract": prd_config.PRD_INPUT_CONTRACT,
             "scoring_interface": prd_config.PRD_SCORING_INTERFACE,
         },
+        **(
+            {
+                "results_artifact": {
+                    "path": _relative_path(results_path, root),
+                    "sha256": sha256_file(results_path),
+                }
+            }
+            if is_notebook_artifact
+            else {}
+        ),
         "data_sources": {
             "ratings": {
                 "path": _relative_path(prd_config.RATINGS_SOURCE_PATH, root),
@@ -365,7 +385,7 @@ def build_prd_manifest(
         },
         "source_experiment": _source_experiment(
             comparison_path=comparison_path,
-            results_path=results_path,
+            candidate_results_path=experiment_candidate_results_path,
             baseline_results_path=baseline_results_path,
             v2_validation_path=v2_validation_path,
             run_manifest_path=run_manifest_path,
@@ -391,14 +411,27 @@ def build_prd_manifest(
 def build_canonical_prd_manifest(
     *, root: Path = prd_config.ROOT
 ) -> dict[str, Any]:
-    """Rebuild the currently recorded promoted pointer from frozen evidence."""
+    """Build the notebook artifact pointer, or the legacy pointer until it exists."""
+    notebook_artifacts_exist = (
+        prd_config.PRD_ARTIFACT_PATH.is_file()
+        and prd_config.PRD_RESULTS_PATH.is_file()
+    )
     return build_prd_manifest(
-        model_path=prd_config.PRD_ARTIFACT_PATH,
-        results_path=prd_config.PRD_CANDIDATE_RESULTS_PATH,
+        model_path=(
+            prd_config.PRD_ARTIFACT_PATH
+            if notebook_artifacts_exist
+            else prd_config.EXPERIMENT_CANDIDATE_ARTIFACT_PATH
+        ),
+        results_path=(
+            prd_config.PRD_RESULTS_PATH
+            if notebook_artifacts_exist
+            else prd_config.PRD_CANDIDATE_RESULTS_PATH
+        ),
         comparison_path=prd_config.PRD_COMPARISON_PATH,
         baseline_results_path=prd_config.PRD_BASELINE_RESULTS_PATH,
         v2_validation_path=prd_config.PRD_V2_VALIDATION_PATH,
         run_manifest_path=prd_config.PRD_RUN_MANIFEST_PATH,
+        experiment_candidate_results_path=prd_config.PRD_CANDIDATE_RESULTS_PATH,
         historical_baseline=prd_config.PHASE5_HISTORICAL_BASELINE,
         promotion_date=prd_config.PRD_PROMOTION_DATE,
         validation_scope=prd_config.PRD_VALIDATION_SCOPE,
@@ -451,6 +484,7 @@ def write_prd_manifest(
 
     selected_inputs = _manifest_input_paths(manifest, root=root)
     selected_inputs.add(prd_config.PRD_ARTIFACT_PATH.resolve())
+    selected_inputs.add(prd_config.PRD_RESULTS_PATH.resolve())
     if destination in selected_inputs:
         raise ValueError("refusing to overwrite a selected manifest input artifact")
 
@@ -468,6 +502,8 @@ def _manifest_input_paths(
         manifest["data_sources"]["feature_artifact"]["path"],
         manifest["data_sources"]["feature_artifact"]["metadata_path"],
     ]
+    if "results_artifact" in manifest:
+        relative_paths.append(manifest["results_artifact"]["path"])
     experiment = manifest["source_experiment"]
     relative_paths.extend(
         experiment[key]

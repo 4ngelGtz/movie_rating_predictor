@@ -45,6 +45,20 @@ def test_prd_manifest_resolves_exact_promoted_model_and_artifacts() -> None:
     assert manifest["artifact"]["feature_types_embedded"] is False
 
 
+def test_canonical_notebook_artifact_paths_are_under_prd() -> None:
+    assert prd_config.PRD_ARTIFACT_PATH == (
+        prd_config.ROOT / "models/prd/xgboost_genome_prd_v1.model.json"
+    )
+    assert prd_config.PRD_RESULTS_PATH == (
+        prd_config.ROOT / "models/prd/xgboost_genome_prd_v1.results.json"
+    )
+    assert prd_config.PRD_ARTIFACT_PATH.parent == prd_config.PRD_OUTPUT_DIR
+    assert prd_config.PRD_RESULTS_PATH.parent == prd_config.PRD_OUTPUT_DIR
+    assert prd_config.EXPERIMENT_CANDIDATE_ARTIFACT_PATH.parent == (
+        prd_config.IMMUTABLE_EXPERIMENT_EVIDENCE_DIR
+    )
+
+
 def test_comparison_runner_protects_immutable_evidence_by_default() -> None:
     for immutable_directory in prd_config.IMMUTABLE_HISTORICAL_EVIDENCE_DIRS:
         with pytest.raises(ValueError, match="immutable model evidence"):

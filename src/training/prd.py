@@ -28,11 +28,14 @@ def load_prd_model(manifest: dict[str, Any] | None = None) -> XGBClassifier:
     return model
 
 
-def _validate_provenance(value: dict[str, Any]) -> None:
-    if (
-        value.get("provenance") != prd_config.historical_artifact_provenance()
-        or "source_commit" in value
-    ):
+def _validate_provenance(value: dict[str, Any], *, root: Path) -> None:
+    artifact = root / value["artifact"]["path"]
+    expected = (
+        prd_config.notebook_artifact_provenance()
+        if artifact.resolve() == prd_config.PRD_ARTIFACT_PATH.resolve()
+        else prd_config.historical_artifact_provenance()
+    )
+    if value.get("provenance") != expected or "source_commit" in value:
         raise ValueError("PRD artifact provenance is incomplete or overstated")
 
 
@@ -72,7 +75,7 @@ def validate_prd_manifest(
         raise ValueError("PRD model manifest status must be PRD")
     if value["canonical_name"] != prd_config.PRD_MODEL_NAME:
         raise ValueError("unexpected canonical PRD model name")
-    _validate_provenance(value)
+    _validate_provenance(value, root=root)
 
     contract = value["feature_contract"]
     if contract["predictor_count"] != len(prd_config.PRD_FEATURES):
@@ -135,7 +138,11 @@ def validate_prd_manifest(
         raise ValueError("PRD feature metadata references disagree")
 
     artifact = root / value["artifact"]["path"]
-    if artifact.resolve() != prd_config.PRD_ARTIFACT_PATH.resolve():
+    allowed_artifacts = {
+        prd_config.PRD_ARTIFACT_PATH.resolve(),
+        prd_config.EXPERIMENT_CANDIDATE_ARTIFACT_PATH.resolve(),
+    }
+    if artifact.resolve() not in allowed_artifacts:
         raise ValueError("PRD model path differs from executable config")
     if not artifact.is_file() or sha256_file(artifact) != value["artifact"]["sha256"]:
         raise ValueError("PRD model artifact is absent or does not match its digest")
@@ -170,9 +177,17 @@ def validate_prd_manifest(
         if not source.is_file() or sha256_file(source) != experiment[digest_key]:
             raise ValueError(f"source experiment {path_key} is absent or changed")
 
-    results = json.loads(
-        (root / experiment["candidate_results"]).read_text(encoding="utf-8")
-    )
+    results_artifact = value.get("results_artifact")
+    if results_artifact is None:
+        results_path = root / experiment["candidate_results"]
+    else:
+        results_path = root / results_artifact["path"]
+        if (
+            not results_path.is_file()
+            or sha256_file(results_path) != results_artifact["sha256"]
+        ):
+            raise ValueError("PRD results artifact is absent or changed")
+    results = json.loads(results_path.read_text(encoding="utf-8"))
     if results["feature_columns"] != contract["predictor_names"]:
         raise ValueError("candidate result feature list differs from PRD contract")
     if results["model_params"] != prd_config.serialized_model_params():
@@ -200,7 +215,10 @@ def validate_prd_manifest(
     comparison = json.loads(
         (root / experiment["comparison"]).read_text(encoding="utf-8")
     )
-    if comparison["model_b"]["metrics"]["test"] != test_metrics:
+    if (
+        results_artifact is None
+        and comparison["model_b"]["metrics"]["test"] != test_metrics
+    ):
         raise ValueError("comparison and candidate test metrics differ")
     _validate_temporal_robustness(
         evaluation, comparison, value["historical_baseline"]["name"]

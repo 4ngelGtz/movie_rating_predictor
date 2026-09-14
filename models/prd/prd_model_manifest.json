@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "model_name": "xgboost_genome_prd",
   "model_version": "1",
   "canonical_name": "xgboost_genome_prd_v1",
@@ -7,18 +7,24 @@
   "promotion_date": "2026-09-14",
   "validation_scope": "offline temporal production baseline; not online business validation",
   "provenance": {
-    "feature_implementation_base_commit": "f5f9ff709a191c5e75647fb50f617217764ca77d",
-    "experiment_code_status_at_artifact_creation": "uncommitted",
-    "artifact_provenance": "The feature implementation is committed at the base commit, but the experiment runner was uncommitted when this artifact was created; the artifact cannot be cryptographically tied to one complete committed source revision.",
+    "artifact_origin": "canonical notebook workflow",
+    "notebook_workflow": "notebooks/model/genome_prd_v1",
+    "source_revision": null,
+    "source_experiment": "models/experiments/genome_experiment_v1",
+    "reproducibility_note": "Deterministic for the same data, environment, seed, and code; XGBoost serialization is not guaranteed byte-identical across library or platform versions.",
     "promotion_commit": null
   },
   "artifact": {
-    "path": "models/experiments/genome_experiment_v1/model_b_genome_25.model.json",
+    "path": "models/prd/xgboost_genome_prd_v1.model.json",
     "sha256": "53fdfbd3b8b3104dc4cbb74598a40b5f3a206bd09ad3d6d7093481046b4a989a",
     "feature_names_embedded": false,
     "feature_types_embedded": false,
     "input_contract": "src.training.prd_config.PRD_FEATURES",
     "scoring_interface": "src.training.prd.predict_prd"
+  },
+  "results_artifact": {
+    "path": "models/prd/xgboost_genome_prd_v1.results.json",
+    "sha256": "09ee54d6894d809695f9bc40612ed37fc1f5dd13ac1328ea7da7f227de2cd5a3"
   },
   "data_sources": {
     "ratings": {

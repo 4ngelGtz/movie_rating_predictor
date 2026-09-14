@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import shutil
 
 import pytest
 
@@ -26,7 +27,7 @@ from src.training.prd import (
 
 def _canonical_kwargs() -> dict[str, object]:
     return {
-        "model_path": prd_config.PRD_ARTIFACT_PATH,
+        "model_path": prd_config.EXPERIMENT_CANDIDATE_ARTIFACT_PATH,
         "results_path": prd_config.PRD_CANDIDATE_RESULTS_PATH,
         "comparison_path": prd_config.PRD_COMPARISON_PATH,
         "promotion_date": prd_config.PRD_PROMOTION_DATE,
@@ -53,7 +54,7 @@ def test_canonical_manifest_is_reproduced_semantically() -> None:
 def test_model_digest_is_derived_from_the_artifact() -> None:
     generated = build_canonical_prd_manifest()
     assert generated["artifact"]["sha256"] == sha256_file(
-        prd_config.PRD_ARTIFACT_PATH
+        prd_config.EXPERIMENT_CANDIDATE_ARTIFACT_PATH
     )
     assert generated["artifact"]["path"] == (
         "models/experiments/genome_experiment_v1/model_b_genome_25.model.json"
@@ -153,6 +154,37 @@ def test_generated_manifest_preserves_historical_provenance() -> None:
         validate_prd_manifest(overstated)
 
 
+def test_notebook_artifact_gets_distinct_provenance_and_results_pointer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    model_path = tmp_path / "xgboost_genome_prd_v1.model.json"
+    results_path = tmp_path / "xgboost_genome_prd_v1.results.json"
+    shutil.copyfile(prd_config.EXPERIMENT_CANDIDATE_ARTIFACT_PATH, model_path)
+    shutil.copyfile(prd_config.PRD_CANDIDATE_RESULTS_PATH, results_path)
+    monkeypatch.setattr(prd_config, "PRD_ARTIFACT_PATH", model_path)
+
+    generated = build_prd_manifest(
+        model_path=model_path,
+        results_path=results_path,
+        comparison_path=prd_config.PRD_COMPARISON_PATH,
+        experiment_candidate_results_path=prd_config.PRD_CANDIDATE_RESULTS_PATH,
+        promotion_date=prd_config.PRD_PROMOTION_DATE,
+        validation_scope=prd_config.PRD_VALIDATION_SCOPE,
+        promote=True,
+        root=Path("/"),
+    )
+
+    assert generated["schema_version"] == 3
+    assert generated["provenance"] == prd_config.notebook_artifact_provenance()
+    assert generated["provenance"] != prd_config.historical_artifact_provenance()
+    assert generated["results_artifact"]["path"] == (
+        results_path.relative_to(Path("/")).as_posix()
+    )
+    assert generated["source_experiment"]["candidate_results"].endswith(
+        "models/experiments/genome_experiment_v1/model_b_genome_25.results.json"
+    )
+
+
 def test_check_succeeds_against_the_committed_manifest() -> None:
     check_prd_manifest()
     assert main(["--check"]) == 0
@@ -180,7 +212,7 @@ def test_write_refuses_to_overwrite_canonical_pointer_without_promotion(
 ) -> None:
     original = PRD_MODEL_MANIFEST.read_bytes()
     candidate = build_prd_manifest(
-        model_path=prd_config.PRD_ARTIFACT_PATH,
+        model_path=prd_config.EXPERIMENT_CANDIDATE_ARTIFACT_PATH,
         results_path=prd_config.PRD_CANDIDATE_RESULTS_PATH,
         comparison_path=prd_config.PRD_COMPARISON_PATH,
         promote=False,
@@ -195,7 +227,7 @@ def test_write_refuses_to_overwrite_canonical_pointer_without_promotion(
             "--write",
             str(destination),
             "--model",
-            str(prd_config.PRD_ARTIFACT_PATH),
+            str(prd_config.EXPERIMENT_CANDIDATE_ARTIFACT_PATH),
             "--results",
             str(prd_config.PRD_CANDIDATE_RESULTS_PATH),
             "--comparison",
@@ -210,7 +242,7 @@ def test_write_refuses_to_overwrite_canonical_pointer_without_promotion(
 @pytest.mark.parametrize(
     "destination",
     [
-        prd_config.PRD_ARTIFACT_PATH,
+        prd_config.EXPERIMENT_CANDIDATE_ARTIFACT_PATH,
         prd_config.PRD_CANDIDATE_RESULTS_PATH,
         prd_config.PRD_COMPARISON_PATH,
         prd_config.PRD_RUN_MANIFEST_PATH,

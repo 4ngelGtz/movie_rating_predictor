@@ -182,6 +182,96 @@ def _gain_importance(
     return rows
 
 
+def _curve_sample(
+    labels: np.ndarray,
+    probability: np.ndarray,
+    max_rows: int,
+    seed: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Deterministic subsample retained only for notebook display curves."""
+    if len(labels) <= max_rows:
+        return labels.copy(), probability.copy()
+    selected = np.sort(
+        np.random.default_rng(seed).choice(len(labels), max_rows, replace=False)
+    )
+    return labels[selected].copy(), probability[selected].copy()
+
+
+def evaluate_model(
+    model: XGBClassifier,
+    feature_path: Path,
+    rating_values: np.ndarray,
+    feature_columns: tuple[str, ...] = prd_config.PRD_FEATURES,
+    curve_sample_rows: int | None = None,
+) -> dict[str, Any]:
+    """Evaluate a fitted model with the canonical split and metric definitions.
+
+    When ``curve_sample_rows`` is set, the result also includes a non-persisted
+    ``curve_samples`` mapping of split name to ``(labels, probability)`` arrays
+    for notebook plots. Callers that write the PRD results artifact must pop
+    that key before serialization.
+    """
+    split_metrics: dict[str, dict[str, float | int]] = {}
+    curve_samples: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    test_labels: np.ndarray | None = None
+    test_probability: np.ndarray | None = None
+    test_timestamps: np.ndarray | None = None
+    seed = int(prd_config.PRD_MODEL_PARAMS["random_state"])
+    for split_name in prd_config.PRD_SPLITS:
+        matrix, labels, timestamps = load_split(
+            feature_path, rating_values, split_name, feature_columns
+        )
+        probability = model.predict_proba(matrix)[:, 1]
+        split_metrics[split_name] = metrics(labels, probability)
+        if curve_sample_rows is not None:
+            curve_samples[split_name] = _curve_sample(
+                labels, probability, curve_sample_rows, seed
+            )
+        if split_name == "test":
+            test_labels = labels
+            test_probability = probability
+            test_timestamps = timestamps
+        else:
+            del matrix, labels, timestamps, probability
+            gc.collect()
+
+    assert test_labels is not None
+    assert test_probability is not None
+    assert test_timestamps is not None
+    calibration_bins, calibration_ece = _calibration(
+        test_labels, test_probability
+    )
+    result: dict[str, Any] = {
+        "name": prd_config.PRD_MODEL_NAME,
+        "random_seed": prd_config.PRD_MODEL_PARAMS["random_state"],
+        "feature_columns": list(feature_columns),
+        "model_params": prd_config.serialized_model_params(),
+        "missing": "NaN (native XGBoost handling)",
+        "decision_threshold": None,
+        "decision_threshold_note": "Phase 5 defines no classification threshold",
+        "best_iteration_zero_based": int(model.best_iteration),
+        "effective_tree_count": int(model.get_booster().num_boosted_rounds()),
+        "metrics": split_metrics,
+        "test_quarter_metrics": _period_metrics(
+            test_labels, test_probability, test_timestamps
+        ),
+        "test_calibration_ece_10_uniform_bins": calibration_ece,
+        "test_calibration_bins": calibration_bins,
+        "gain_importance": _gain_importance(model, feature_columns),
+        "package_versions": {
+            "xgboost": xgb.__version__,
+            "scikit_learn": sklearn.__version__,
+            "pandas": pd.__version__,
+            "numpy": np.__version__,
+        },
+    }
+    if curve_samples:
+        result["curve_samples"] = curve_samples
+    del test_labels, test_probability, test_timestamps
+    gc.collect()
+    return result
+
+
 def validate_v2(
     v1_path: Path | None,
     v2_path: Path,

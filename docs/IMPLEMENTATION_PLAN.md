@@ -64,9 +64,10 @@ nearest-neighbor search, or raw Genome dimensions.
 
 ### Phase 5 — Temporal modeling
 
-The numbered notebooks under `notebooks/model/` created the frozen 17-feature
-baseline, fixed the calendar splits, trained XGBoost with validation early
-stopping, and saved evaluation and cohort evidence under `models/`.
+The numbered notebooks under `notebooks/model/phase5_baseline_17/` created the
+frozen 17-feature baseline, fixed the calendar splits, trained XGBoost with
+validation early stopping, and saved evaluation and cohort evidence under
+`models/`. They remain byte-preserved historical evidence.
 
 ### Phase 5A — Genome comparison and PRD promotion
 
@@ -81,6 +82,12 @@ evaluation; `prd_config.py` holds the executable contract;
 `prd.py` validates the generated pointer; and `train_prd.py` /
 `compare_genome.py` remain optional historical reproduction CLIs. The original
 baseline and controlled comparison evidence remain frozen.
+
+The current canonical workflow is the five-notebook sequence under
+`notebooks/model/genome_prd_v1/`. It uses the 25-feature v2 dataset and writes
+the model and compact results to `models/prd/` before deriving the manifest.
+The controlled experiment remains evidence for selection, not the canonical
+notebook output location.
 
 ## Planned work
 
