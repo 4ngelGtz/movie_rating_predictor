@@ -13,7 +13,7 @@ from pandas.api.types import is_datetime64_any_dtype, is_integer_dtype, is_numer
 from src.data.schemas import RATING_VALUES
 from src.features.catalog import CatalogLookups, build_catalog_lookups
 from src.state.moments import (
-    HistoricalRatingState,
+    HistoricalRatingState, # estado point-in-time de la historia de ratings
     RunningMoments,
 )
 

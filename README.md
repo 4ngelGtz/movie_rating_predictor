@@ -45,6 +45,97 @@ features, and trains or validates the model against fixed calendar splits:
 The complete temporal semantics are in
 [`docs/TEMPORAL_CONTRACT.md`](docs/TEMPORAL_CONTRACT.md).
 
+## End-to-end pipeline
+
+The diagram below connects each data stage to the executable script, function,
+or notebook that produces it. Canonical entities are intermediate DataFrames
+built in memory during feature materialization; they are not persisted as a
+separate canonical-data layer.
+
+```text
+MovieLens 20M raw CSV files
+data/raw/{rating,movie,link,tag,genome_scores,genome_tags}.csv
+    |
+    | python -m src.data.build_parquet
+    |   main() -> build_all() -> convert_dataset()
+    v
+Validated typed Parquet sources
+data/processed/
+    ratings.parquet              20,000,263 rows
+    movies.parquet                   27,278 rows
+    links.parquet                    27,278 rows
+    tags.parquet                    465,564 rows   [not used by the current model]
+    genome_scores.parquet        11,709,768 rows
+    genome_tags.parquet               1,128 rows   [not used by the current model]
+    |
+    | python -m src.features.materialize
+    |   materialize_from_parquet()
+    |     src.entities.builders.read_rating_events()
+    |     src.entities.builders.build_movies()
+    |     src.entities.builders.build_genres_and_movie_genres()
+    v
+Canonical in-memory DataFrames
+rating_events:    one row per rating event; key = ratingEventId
+canonical_movies: one row per movie; key = movieId
+movie_genres:     one row per (movieId, genreId) membership
+    |
+    | src.features.expanding.iter_expanding_rating_features()
+    |   uses src.state.moments.HistoricalRatingState
+    |   produces the 17-feature historical/catalog baseline
+    |
+    | src.features.genome.iter_genome_features()
+    |   uses GenomeHistoryState and genome_scores.parquet
+    |   produces eight Genome features
+    |
+    | src.features.materialize._write_streamed_features()
+    v
+Materialized event-grain feature dataset
+data/features/rating_features_v2.parquet
+data/features/rating_features_v2.metadata.json
+    one row per ratingEventId
+    4 context columns + 25 model predictors
+    20,000,263 rows
+    |
+    | notebooks/model/genome_prd_v1/01_training_dataset.ipynb
+    |   validates the materialized dataset and feature contract
+    |
+    | notebooks/model/genome_prd_v1/02_temporal_splits.ipynb
+    |   reconstructs highRating from ratings.parquet and audits the splits
+    v
+Temporal modeling partitions
+train:      timestamp < 2012-01-01
+validation: 2012-01-01 <= timestamp < 2014-01-01
+test:       timestamp >= 2014-01-01
+    |
+    | src.training.modeling.load_split()
+    |   selects PRD_FEATURES, creates float32 X matrices, and aligns y by
+    |   ratingEventId
+    |
+    | notebooks/model/genome_prd_v1/03_xgboost_training.ipynb
+    |   XGBClassifier(**PRD_MODEL_PARAMS).fit(...)
+    v
+Trained canonical model
+models/prd/xgboost_genome_prd_v1.model.json
+    |
+    | notebooks/model/genome_prd_v1/04_model_evaluation.ipynb
+    |   src.training.modeling.evaluate_model()
+    v
+Evaluation results
+models/prd/xgboost_genome_prd_v1.results.json
+    |
+    | notebooks/model/genome_prd_v1/05_model_artifact_and_manifest.ipynb
+    |   src.training.build_prd_manifest.build_prd_manifest()
+    |   src.training.prd.validate_prd_manifest()
+    v
+Promoted-model pointer and machine-readable contract
+models/prd/prd_model_manifest.json
+```
+
+Although all six raw sources are converted to Parquet, the current 25-feature
+materializer reads only `ratings.parquet`, `movies.parquet`, `links.parquet`,
+and `genome_scores.parquet`. `tags.parquet` and `genome_tags.parquet` do not
+feed the current PRD model.
+
 ## Main result
 
 On the 846,774-row 2014+ test partition, the PRD model achieved:
