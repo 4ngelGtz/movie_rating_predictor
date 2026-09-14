@@ -92,9 +92,17 @@ RATINGS_SOURCE_SHA256 = (
 )
 FEATURE_ARTIFACT_PATH = ROOT / "data/features/rating_features_v2.parquet"
 FEATURE_METADATA_PATH = ROOT / "data/features/rating_features_v2.metadata.json"
-PRD_ARTIFACT_PATH = ROOT / "models/genome_experiment_v1/model_b_genome_25.model.json"
-IMMUTABLE_EXPERIMENT_EVIDENCE_DIR = ROOT / "models/genome_experiment_v1"
-IMMUTABLE_HISTORICAL_EVIDENCE_DIRS = (IMMUTABLE_EXPERIMENT_EVIDENCE_DIR,)
+IMMUTABLE_EXPERIMENT_EVIDENCE_DIR = (
+    ROOT / "models/experiments/genome_experiment_v1"
+)
+PHASE5_HISTORICAL_EVIDENCE_DIR = ROOT / "models/history/phase5"
+PRD_ARTIFACT_PATH = (
+    IMMUTABLE_EXPERIMENT_EVIDENCE_DIR / "model_b_genome_25.model.json"
+)
+IMMUTABLE_HISTORICAL_EVIDENCE_DIRS = (
+    IMMUTABLE_EXPERIMENT_EVIDENCE_DIR,
+    PHASE5_HISTORICAL_EVIDENCE_DIR,
+)
 PRD_COMPARISON_PATH = IMMUTABLE_EXPERIMENT_EVIDENCE_DIR / "comparison.json"
 PRD_CANDIDATE_RESULTS_PATH = (
     IMMUTABLE_EXPERIMENT_EVIDENCE_DIR / "model_b_genome_25.results.json"
@@ -104,17 +112,27 @@ PRD_BASELINE_RESULTS_PATH = (
 )
 PRD_V2_VALIDATION_PATH = IMMUTABLE_EXPERIMENT_EVIDENCE_DIR / "v2_validation.json"
 PRD_RUN_MANIFEST_PATH = IMMUTABLE_EXPERIMENT_EVIDENCE_DIR / "run_manifest.json"
-PRD_MODEL_MANIFEST_PATH = ROOT / "models/prd_model_manifest.json"
+PRD_MODEL_MANIFEST_PATH = ROOT / "models/prd/prd_model_manifest.json"
 DEFAULT_COMPARISON_REPRODUCTION_DIR = (
-    ROOT / "models/genome_experiment_reproduction_v1"
+    ROOT / "models/experiments/genome_experiment_reproduction_v1"
 )
-DEFAULT_PRD_REPRODUCTION_DIR = ROOT / "models/xgboost_genome_prd_v1_reproduction"
+DEFAULT_PRD_REPRODUCTION_DIR = (
+    ROOT / "models/experiments/xgboost_genome_prd_v1_reproduction"
+)
 PHASE5_HISTORICAL_BASELINE = {
     "name": "phase5_baseline_17",
-    "model": "models/xgboost_baseline_v1.json",
-    "metadata": "models/xgboost_baseline_v1.metadata.json",
-    "evaluation": "models/xgboost_baseline_v1.evaluation.json",
-    "error_analysis": "models/xgboost_baseline_v1.error_analysis.json",
+    "model": (
+        PHASE5_HISTORICAL_EVIDENCE_DIR / "xgboost_baseline_v1.json"
+    ).relative_to(ROOT).as_posix(),
+    "metadata": (
+        PHASE5_HISTORICAL_EVIDENCE_DIR / "xgboost_baseline_v1.metadata.json"
+    ).relative_to(ROOT).as_posix(),
+    "evaluation": (
+        PHASE5_HISTORICAL_EVIDENCE_DIR / "xgboost_baseline_v1.evaluation.json"
+    ).relative_to(ROOT).as_posix(),
+    "error_analysis": (
+        PHASE5_HISTORICAL_EVIDENCE_DIR / "xgboost_baseline_v1.error_analysis.json"
+    ).relative_to(ROOT).as_posix(),
 }
 PRD_TEST_QUARTERS = ("2014Q1", "2014Q2", "2014Q3", "2014Q4", "2015Q1")
 QUARTERLY_IMPROVEMENT_DIRECTIONS = {

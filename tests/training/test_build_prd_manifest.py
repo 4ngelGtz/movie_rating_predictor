@@ -56,7 +56,7 @@ def test_model_digest_is_derived_from_the_artifact() -> None:
         prd_config.PRD_ARTIFACT_PATH
     )
     assert generated["artifact"]["path"] == (
-        "models/genome_experiment_v1/model_b_genome_25.model.json"
+        "models/experiments/genome_experiment_v1/model_b_genome_25.model.json"
     )
     assert generated["artifact"]["feature_names_embedded"] is False
     assert generated["artifact"]["feature_types_embedded"] is False
@@ -233,11 +233,14 @@ def test_write_rejects_selected_input_artifacts(destination: Path) -> None:
     assert destination.read_bytes() == original
 
 
-def test_write_rejects_nested_immutable_evidence_path() -> None:
+@pytest.mark.parametrize(
+    "immutable_directory", prd_config.IMMUTABLE_HISTORICAL_EVIDENCE_DIRS
+)
+def test_write_rejects_nested_immutable_evidence_path(
+    immutable_directory: Path,
+) -> None:
     destination = (
-        prd_config.IMMUTABLE_EXPERIMENT_EVIDENCE_DIR
-        / "nested"
-        / "candidate_manifest.json"
+        immutable_directory / "nested" / "candidate_manifest.json"
     )
     with pytest.raises(ValueError, match="inside immutable evidence"):
         write_prd_manifest(build_canonical_prd_manifest(), destination)

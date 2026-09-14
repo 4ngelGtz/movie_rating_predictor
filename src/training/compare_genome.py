@@ -1,8 +1,7 @@
 """Historical CLI: reproduce the controlled 17-vs-25 Genome experiment.
 
-Notebooks are the primary training interface. This module regenerates the
-comparison outside ``models/genome_experiment_v1/`` unless an overwrite is
-explicitly requested.
+Notebooks are the primary training interface. This module writes reproductions
+outside the immutable ``models/experiments/genome_experiment_v1/`` directory.
 """
 
 from __future__ import annotations
@@ -26,16 +25,13 @@ from src.training.modeling import (
 )
 
 
-def ensure_safe_output_directory(output_dir: Path, *, force: bool = False) -> Path:
+def ensure_safe_output_directory(output_dir: Path) -> Path:
     """Protect the immutable promotion evidence from accidental regeneration."""
     try:
-        return validate_output_directory(
-            output_dir, allow_immutable_evidence=force
-        )
+        return validate_output_directory(output_dir)
     except ValueError as error:
         raise ValueError(
-            f"{error}; choose another --output-dir or pass "
-            "--force-canonical-evidence-overwrite explicitly"
+            f"{error}; choose another --output-dir"
         ) from error
 
 
@@ -99,23 +95,19 @@ def main() -> None:
     parser.add_argument(
         "--saved-baseline",
         type=Path,
-        default=prd_config.ROOT / "models/xgboost_baseline_v1.evaluation.json",
+        default=(
+            prd_config.ROOT
+            / prd_config.PHASE5_HISTORICAL_BASELINE["evaluation"]
+        ),
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
         default=prd_config.DEFAULT_COMPARISON_REPRODUCTION_DIR,
     )
-    parser.add_argument(
-        "--force-canonical-evidence-overwrite",
-        action="store_true",
-        help="allow the explicitly requested immutable evidence directory",
-    )
     args = parser.parse_args()
     try:
-        output_dir = ensure_safe_output_directory(
-            args.output_dir, force=args.force_canonical_evidence_overwrite
-        )
+        output_dir = ensure_safe_output_directory(args.output_dir)
     except ValueError as error:
         parser.error(str(error))
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -137,7 +129,6 @@ def main() -> None:
         args.v2_features,
         rating_values,
         output_dir,
-        allow_immutable_evidence=args.force_canonical_evidence_overwrite,
     )
     saved = json.loads(args.saved_baseline.read_text(encoding="utf-8"))["metrics"]
     for split in ("train", "validation", "test"):
@@ -154,7 +145,6 @@ def main() -> None:
         args.v2_features,
         rating_values,
         output_dir,
-        allow_immutable_evidence=args.force_canonical_evidence_overwrite,
     )
     comparison = _comparison(model_a, model_b)
     comparison["v2_validation"] = validation

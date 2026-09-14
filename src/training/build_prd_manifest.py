@@ -15,9 +15,15 @@ Intended final notebook cell::
     from src.training.prd import validate_prd_manifest
 
     manifest = build_prd_manifest(
-        model_path=Path("models/genome_experiment_v1/model_b_genome_25.model.json"),
-        results_path=Path("models/genome_experiment_v1/model_b_genome_25.results.json"),
-        comparison_path=Path("models/genome_experiment_v1/comparison.json"),
+        model_path=Path(
+            "models/experiments/genome_experiment_v1/model_b_genome_25.model.json"
+        ),
+        results_path=Path(
+            "models/experiments/genome_experiment_v1/model_b_genome_25.results.json"
+        ),
+        comparison_path=Path(
+            "models/experiments/genome_experiment_v1/comparison.json"
+        ),
         promotion_date="2026-09-14",
         validation_scope=(
             "offline temporal production baseline; not online business validation"

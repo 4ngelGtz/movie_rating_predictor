@@ -5,10 +5,10 @@
 Promote the 25-feature Genome model as the project's canonical PRD model and
 offline temporal production baseline under the name `xgboost_genome_prd_v1`.
 The machine-readable default pointer is
-`models/prd_model_manifest.json`. The original 17-feature model remains the
+`models/prd/prd_model_manifest.json`. The original 17-feature model remains the
 historical `phase5_baseline_17` benchmark; none of its artifacts are replaced.
-The complete `models/genome_experiment_v1/` directory is immutable promotion
-evidence and is not a reproduction output directory.
+The complete `models/experiments/genome_experiment_v1/` directory is immutable
+promotion evidence and is not a reproduction output directory.
 
 This promotion identifies the default project model. It does not claim
 real-world online validation or business lift.
@@ -16,8 +16,8 @@ real-world online validation or business lift.
 ## Evidence
 
 The decision uses the saved controlled 17-vs-25 experiment in
-`models/genome_experiment_v1/comparison.json`. Model A reproduced the saved
-Phase 5 baseline exactly. Model B changed only the predictor allow-list: it
+`models/experiments/genome_experiment_v1/comparison.json`. Model A reproduced
+the saved Phase 5 baseline exactly. Model B changed only the predictor allow-list: it
 added the eight contracted Genome features while preserving the target,
 temporal partitions, random seed, XGBoost parameters, native missing-value
 handling, early stopping, and evaluation methodology.
@@ -122,11 +122,11 @@ The controlled two-model comparison remains reproducible with:
 .venv/bin/python -m src.training.compare_genome
 ```
 
-That command writes to `models/genome_experiment_reproduction_v1/` by default.
-It refuses to target `models/genome_experiment_v1/` or a path inside it unless
-`--force-canonical-evidence-overwrite` is supplied explicitly. Both PRD training
-and comparison validation hash the ratings source before positional label
-reconstruction.
+That command writes to
+`models/experiments/genome_experiment_reproduction_v1/` by default. It refuses
+to target `models/experiments/genome_experiment_v1/` or any path inside it.
+Both PRD training and comparison validation hash the ratings source before
+positional label reconstruction.
 
 Generated feature Parquet remains ignored. Small model, result, validation,
 and decision artifacts follow the existing `models/` convention.

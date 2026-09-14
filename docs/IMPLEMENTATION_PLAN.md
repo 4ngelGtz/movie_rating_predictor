@@ -121,7 +121,7 @@ cold-start, replay, failure, and update behavior.
 - Future notebook experiment runs may write a small `run_manifest.json` beside
   result artifacts (experiment name, feature artifact path/size, training
   runtimes, notes). Do not modify the immutable
-  `models/genome_experiment_v1/run_manifest.json`.
+  `models/experiments/genome_experiment_v1/run_manifest.json`.
 - Add TMDb director/actor enrichment only after stable source-qualified person
   IDs and snapshot availability semantics exist.
 - Evaluate tag features, raw Genome dimensions, embeddings, collaborative

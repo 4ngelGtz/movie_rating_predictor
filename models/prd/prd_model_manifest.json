@@ -13,7 +13,7 @@
     "promotion_commit": null
   },
   "artifact": {
-    "path": "models/genome_experiment_v1/model_b_genome_25.model.json",
+    "path": "models/experiments/genome_experiment_v1/model_b_genome_25.model.json",
     "sha256": "53fdfbd3b8b3104dc4cbb74598a40b5f3a206bd09ad3d6d7093481046b4a989a",
     "feature_names_embedded": false,
     "feature_types_embedded": false,
@@ -31,23 +31,23 @@
     }
   },
   "source_experiment": {
-    "comparison": "models/genome_experiment_v1/comparison.json",
+    "comparison": "models/experiments/genome_experiment_v1/comparison.json",
     "comparison_sha256": "6022fa97b1b3a6c703000cbbdb4f26059662a9a490cc881232e74d5092767b83",
-    "candidate_results": "models/genome_experiment_v1/model_b_genome_25.results.json",
+    "candidate_results": "models/experiments/genome_experiment_v1/model_b_genome_25.results.json",
     "candidate_results_sha256": "e7fc245fb59660526ee9ed06b4f49404b9629f00949d22c51f0195d6474489dd",
-    "baseline_results": "models/genome_experiment_v1/model_a_17.results.json",
+    "baseline_results": "models/experiments/genome_experiment_v1/model_a_17.results.json",
     "baseline_results_sha256": "f366699134ea15381174df6f94c011377670041299f5a9f2845195cf03ec885b",
-    "v2_validation": "models/genome_experiment_v1/v2_validation.json",
+    "v2_validation": "models/experiments/genome_experiment_v1/v2_validation.json",
     "v2_validation_sha256": "a50c8d5d0fba21dee38b4dddcc9cc24714085f49a4e88ff1b9a71ee2fd29684b",
-    "run_manifest": "models/genome_experiment_v1/run_manifest.json",
+    "run_manifest": "models/experiments/genome_experiment_v1/run_manifest.json",
     "run_manifest_sha256": "e164ce47a6b09cce187dba5da5aad603850fcd1a61b73182439ec1e5f99c6a6e"
   },
   "historical_baseline": {
     "name": "phase5_baseline_17",
-    "model": "models/xgboost_baseline_v1.json",
-    "metadata": "models/xgboost_baseline_v1.metadata.json",
-    "evaluation": "models/xgboost_baseline_v1.evaluation.json",
-    "error_analysis": "models/xgboost_baseline_v1.error_analysis.json"
+    "model": "models/history/phase5/xgboost_baseline_v1.json",
+    "metadata": "models/history/phase5/xgboost_baseline_v1.metadata.json",
+    "evaluation": "models/history/phase5/xgboost_baseline_v1.evaluation.json",
+    "error_analysis": "models/history/phase5/xgboost_baseline_v1.error_analysis.json"
   },
   "feature_contract": {
     "version": "FEATURE_DICTIONARY_V1_GENOME_ADDENDUM",

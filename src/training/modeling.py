@@ -49,15 +49,18 @@ def validate_ratings_source(path: Path, expected_sha256: str) -> None:
 
 def validate_output_directory(
     output_dir: Path,
-    *,
-    allow_immutable_evidence: bool = False,
 ) -> Path:
     """Reject writes into the immutable promotion-evidence directory."""
     resolved = output_dir.resolve()
-    immutable = prd_config.IMMUTABLE_EXPERIMENT_EVIDENCE_DIR.resolve()
-    targets_evidence = resolved == immutable or immutable in resolved.parents
-    if targets_evidence and not allow_immutable_evidence:
-        raise ValueError("refusing to write inside immutable PRD experiment evidence")
+    immutable_directories = tuple(
+        path.resolve() for path in prd_config.IMMUTABLE_HISTORICAL_EVIDENCE_DIRS
+    )
+    targets_evidence = any(
+        resolved == immutable or immutable in resolved.parents
+        for immutable in immutable_directories
+    )
+    if targets_evidence:
+        raise ValueError("refusing to write inside immutable model evidence")
     return resolved
 
 
@@ -274,12 +277,8 @@ def run_model(
     feature_path: Path,
     rating_values: np.ndarray,
     output_dir: Path,
-    *,
-    allow_immutable_evidence: bool = False,
 ) -> dict[str, Any]:
-    output_dir = validate_output_directory(
-        output_dir, allow_immutable_evidence=allow_immutable_evidence
-    )
+    output_dir = validate_output_directory(output_dir)
     np.random.seed(int(prd_config.PRD_MODEL_PARAMS["random_state"]))
     train_x, train_y, train_timestamps = load_split(
         feature_path, rating_values, "train", feature_columns

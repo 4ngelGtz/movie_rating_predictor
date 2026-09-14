@@ -46,22 +46,18 @@ def test_prd_manifest_resolves_exact_promoted_model_and_artifacts() -> None:
 
 
 def test_comparison_runner_protects_immutable_evidence_by_default() -> None:
-    with pytest.raises(ValueError, match="immutable PRD experiment evidence"):
-        ensure_safe_output_directory(
-            prd_config.IMMUTABLE_EXPERIMENT_EVIDENCE_DIR
-        )
-    with pytest.raises(ValueError, match="immutable PRD experiment evidence"):
-        ensure_safe_output_directory(
-            prd_config.IMMUTABLE_EXPERIMENT_EVIDENCE_DIR / "nested"
-        )
-    assert ensure_safe_output_directory(
-        prd_config.IMMUTABLE_EXPERIMENT_EVIDENCE_DIR,
-        force=True,
-    ) == prd_config.IMMUTABLE_EXPERIMENT_EVIDENCE_DIR.resolve()
+    for immutable_directory in prd_config.IMMUTABLE_HISTORICAL_EVIDENCE_DIRS:
+        with pytest.raises(ValueError, match="immutable model evidence"):
+            ensure_safe_output_directory(immutable_directory)
+        with pytest.raises(ValueError, match="immutable model evidence"):
+            ensure_safe_output_directory(immutable_directory / "nested")
     assert (
         prd_config.DEFAULT_COMPARISON_REPRODUCTION_DIR.resolve()
         != prd_config.IMMUTABLE_EXPERIMENT_EVIDENCE_DIR.resolve()
     )
+    assert ensure_safe_output_directory(
+        prd_config.DEFAULT_COMPARISON_REPRODUCTION_DIR
+    ) == prd_config.DEFAULT_COMPARISON_REPRODUCTION_DIR.resolve()
 
 
 def test_prd_scoring_rejects_permuted_feature_order() -> None:

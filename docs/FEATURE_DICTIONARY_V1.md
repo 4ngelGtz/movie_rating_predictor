@@ -5,8 +5,8 @@ predictors and the eight-predictor Genome addendum. The combined 25-predictor
 contract is the input to the current PRD model; the original 17-predictor
 contract remains the historical Phase 5 baseline. This document specifies
 features; the canonical model pointer and split/training contract live in
-`models/prd_model_manifest.json`, and the corresponding executable contract is
-`src/training/prd_config.py`.
+`models/prd/prd_model_manifest.json`, and the corresponding executable contract
+is `src/training/prd_config.py`.
 
 ## 1. Inherited contracts
 
