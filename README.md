@@ -82,12 +82,11 @@ tests/                Unit, temporal, replay, materialization, and PRD contract 
 ```
 
 The immutable `models/experiments/genome_experiment_v1/` bundle explains why
-the 25-feature model was selected. The canonical notebooks separately write
+the 25-feature model was selected. Canonical notebooks write
 `models/prd/xgboost_genome_prd_v1.model.json` and
 `models/prd/xgboost_genome_prd_v1.results.json`, then regenerate the manifest.
-Until that full notebook workflow is run, the existing manifest continues to
-validate the originally promoted experiment artifact; no replacement artifact
-is fabricated during repository restructuring.
+That notebook-produced artifact is the current PRD pointer; the experiment
+directory remains selection evidence, not the training output location.
 
 The training layer stays small and notebook-first:
 
@@ -110,18 +109,28 @@ python -m src.data.build_parquet
 
 # Materialize the canonical 25-feature dataset.
 python -m src.features.materialize
+```
 
-# Validate the promoted artifact, manifest, and local feature metadata.
+### Validate the promoted model
+
+These commands do not train. They check the committed PRD artifact and
+manifest against the executable contract, local feature metadata, and ratings
+digest:
+
+```bash
 python -m src.training.prd
-
-# Confirm the committed manifest still matches derived technical metadata.
 python -m src.training.build_prd_manifest --check
-
-# Run the test suite.
 pytest -q -ra -W default
 ```
 
-Run the canonical notebooks in order:
+`prd` validates the pointer, booster, evaluation evidence, and local v2
+metadata. `--check` regenerates technical metadata in memory and compares it
+with the committed manifest; it does not choose a model or overwrite the
+pointer.
+
+### Retrain with notebooks
+
+Run the canonical notebooks in order after the shared data steps above:
 
 1. `notebooks/model/genome_prd_v1/01_training_dataset.ipynb`
 2. `notebooks/model/genome_prd_v1/02_temporal_splits.ipynb`
@@ -129,12 +138,15 @@ Run the canonical notebooks in order:
 4. `notebooks/model/genome_prd_v1/04_model_evaluation.ipynb`
 5. `notebooks/model/genome_prd_v1/05_model_artifact_and_manifest.ipynb`
 
-They validate/materialize the v2 dataset, audit configured splits, train and
-save the canonical booster, save evaluation results, and derive and validate
-the manifest. `status = "PRD"` is emitted only when promotion is requested
-explicitly. Reproducibility assumes the same data, environment, seed, and code;
-XGBoost does not guarantee byte-identical serialization across library or
-platform versions.
+They validate the v2 dataset, audit configured splits, train and save the
+canonical booster, save evaluation results, and derive and validate the
+manifest. `status = "PRD"` is emitted only when promotion is requested
+explicitly. After the notebooks finish, rerun the validation commands above.
+Reproducibility assumes the same data, environment, seed, and code; XGBoost
+does not guarantee byte-identical serialization across library or platform
+versions.
+
+### Optional historical CLIs
 
 `python -m src.training.train_prd` retrains the promoted model into a separate
 reproduction directory and is intentionally not part of routine validation.

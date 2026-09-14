@@ -9,10 +9,9 @@ The machine-readable default pointer is
 historical `phase5_baseline_17` benchmark; none of its artifacts are replaced.
 The complete `models/experiments/genome_experiment_v1/` directory is immutable
 promotion evidence and is not a reproduction output directory. The canonical
-notebook workflow under `notebooks/model/genome_prd_v1/` produces a distinct
-model and results artifact under `models/prd/`; the existing manifest continues
-to describe the original promoted experiment artifact until that workflow is
-fully run and its final notebook regenerates the pointer.
+notebook workflow under `notebooks/model/genome_prd_v1/` writes the current
+model and results artifact under `models/prd/` and regenerates
+`models/prd/prd_model_manifest.json`.
 
 This promotion identifies the default project model. It does not claim
 real-world online validation or business lift.
@@ -99,16 +98,8 @@ Generate the 25-feature input artifact:
 .venv/bin/python -m src.features.materialize
 ```
 
-Then execute, in numeric order, the five notebooks in
-`notebooks/model/genome_prd_v1/`. Notebook 03 writes
-`models/prd/xgboost_genome_prd_v1.model.json`, notebook 04 writes the matching
-`.results.json`, and notebook 05 derives, writes, and validates
-`models/prd/prd_model_manifest.json`. The same data, environment, seed, and code
-make the workflow deterministic, but XGBoost serialization is not guaranteed
-to be byte-identical across library or platform versions.
-
-Validate the canonical PRD manifest and local feature metadata without
-training:
+Validate the committed PRD artifact, manifest, and local feature metadata
+without training:
 
 ```bash
 .venv/bin/python -m src.training.prd
@@ -117,8 +108,17 @@ training:
 
 `--check` regenerates technical metadata in memory from the frozen artifacts
 and canonical config. It does not choose a model or overwrite the pointer.
-Promotion remains a human decision; `status = "PRD"` is emitted only when
-explicitly requested.
+
+To retrain, execute the five notebooks in `notebooks/model/genome_prd_v1/` in
+numeric order. Notebook 03 writes
+`models/prd/xgboost_genome_prd_v1.model.json`, notebook 04 writes the matching
+`.results.json`, and notebook 05 derives, writes, and validates
+`models/prd/prd_model_manifest.json`. Promotion remains a human decision;
+`status = "PRD"` is emitted only when explicitly requested. The same data,
+environment, seed, and code make the workflow deterministic, but XGBoost
+serialization is not guaranteed to be byte-identical across library or
+platform versions. After the notebooks finish, rerun the validation commands
+above.
 
 Reproduce only the promoted model and its full evaluation, without first
 training the historical baseline. This is an optional historical CLI;

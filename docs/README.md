@@ -26,14 +26,16 @@
   project brief retained to explain the original enrichment-first direction and
   historical phase numbering.
 
-Notebooks are the primary training and evaluation workflow. The notebooks in
-`notebooks/model/phase5_baseline_17/` and original 17-feature artifacts in
-`models/history/phase5/` are frozen Phase 5 evidence. The canonical 25-feature
-workflow is `notebooks/model/genome_prd_v1/`; in order, its notebooks validate
-the v2 dataset, audit temporal splits, train, evaluate, and generate the PRD
-manifest. The two top-level notebooks are exploratory EDA and are not
-production feature specifications. Canonical model and result artifacts live
-in `models/prd/`; controlled selection evidence lives in `models/experiments/`.
+Notebooks are the primary training and evaluation workflow;
+`src/training/prd.py` validates the generated pointer without retraining. The
+notebooks in `notebooks/model/phase5_baseline_17/` and original 17-feature
+artifacts in `models/history/phase5/` are frozen Phase 5 evidence. The
+canonical 25-feature workflow is `notebooks/model/genome_prd_v1/`; in order,
+its notebooks validate the v2 dataset, audit temporal splits, train, evaluate,
+and generate the PRD manifest. The two top-level notebooks are exploratory EDA
+and are not production feature specifications. Canonical model and result
+artifacts live in `models/prd/`; controlled selection evidence lives in
+`models/experiments/`.
 The immutable
 `models/experiments/genome_experiment_v1/` directory must not be rewritten.
 Frozen Phase 5 notebook cells and saved outputs retain their original
