@@ -6,7 +6,7 @@ The implementation of its interval rules lives in `src/features/temporal.py`.
 ## 1. Prediction target and observation
 
 The project is a binary classification task, consistent with
-`PROJECT_CONTEXT.md`:
+the historical project context in `docs/history/PROJECT_CONTEXT.md`:
 
 ```text
 target = 1 if rating >= 4, otherwise 0
@@ -119,11 +119,19 @@ the source's one-second resolution.
 `tags` is event data and is subject to the same strict cutoff if tag-derived
 features are introduced. `movies`, `links`, `genome_scores`, and `genome_tags`
 have no event/availability timestamp. Movie identity, title, genres, and link
-IDs are provisionally treated as static catalog attributes. Genome values are
-an undated snapshot with unknown historical availability. Being static in this
-extract does not make them temporally valid for past predictions: any future
-use as a static or dynamic predictor requires an explicit temporal justification
-or restriction.
+IDs are provisionally treated as static catalog attributes.
+
+The current PRD contract treats Genome relevance vectors as
+`static_external_metadata`. This is an explicit modeling assumption because the
+Genome snapshot is undated; the static vectors are applied as one frozen
+snapshot and are not reconstructed historically. This assumption does not
+extend to user behavior. Every user-dependent Genome feature may use only
+rating events with `timestamp < target_timestamp`. Same-timestamp ratings,
+including the target event's rating, cannot update Genome user state until the
+complete timestamp batch has been scored. `ratingEventId` is used only for
+identity and alignment and never to order events within a timestamp. The exact
+Genome feature definitions and missing-value rules are in
+[`FEATURE_DICTIONARY_V1.md`](FEATURE_DICTIONARY_V1.md).
 
 No exception to `< t` currently exists for timestamp-bearing data.
 

@@ -213,10 +213,9 @@ because they let the model distinguish evidence from fallback values.
   `ratingEventId`. Global, user, and movie counts use canonical events only.
   User-target-genre counts intentionally count associations and are named as
   such; overlap cannot masquerade as canonical event support.
-- **State updates:** serializable state primitives and deterministic restoration
-  exist. Operational replay must enforce idempotency at `(state table, entity
-  key, ratingEventId)` in Phase 4E. Window eviction preserves the inclusive
-  left boundary.
+- **State updates:** serializable state primitives, deterministic restoration,
+  and source-bound replay enforce idempotency at the canonical event grain.
+  Window eviction preserves the inclusive left boundary.
 - **Source verification:** all dynamic columns exist in canonical
   `ratings.parquet`; static `title`/`genres` inputs exist in `movies.parquet`;
   `releaseYear`, `genreStatus`, `ratingEventId`, `highRating`, and bridge tables
@@ -232,24 +231,3 @@ SHA-256 `catalog_snapshot_id` generation over canonical `movies` plus
 `movie_genre`. Phase 4E persists and enforces that identity on feature outputs
 and checkpoints so offline and online code can prove that they used the same
 frozen static snapshot.
-
-## 7. Phase 4 implementation order
-
-1. Implement a timestamp-batch iterator that assigns features from pre-batch
-   state, then applies the complete batch, with shuffle/tie regression tests.
-2. Implement the singleton global accumulator and shared count/sum/M2 logic;
-   expose user and movie expanding features plus fallback resolution.
-3. Add user last-rating time and the exact `[t-30 days, t)` movie queue, including
-   left-boundary tests; complete operational replay/idempotency tests in Phase
-   4E.
-4. Build the validated movie-genre bridge once, then add user-genre accumulators
-   and target-genre read-time aggregation while asserting canonical event-count
-   conservation.
-5. Add versioned static catalog joins and release-age calculation, including
-   missing and negative-age cases.
-6. In Phase 4E, compare a dynamic-only build with the full v1 build, run on a
-   small fixture, then on the canonical Parquet data. Materialize only after
-   equality between uninterrupted replay and checkpoint/replay is demonstrated.
-
-Exact temporal split dates are a Phase 5 choice. They do not alter any feature
-definition above, but must be fixed before reporting validation or test metrics.

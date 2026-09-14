@@ -59,12 +59,14 @@ names or types; its original bytes remain unchanged, while
 prediction.
 
 The manifest schema records source provenance precisely. Commit
-`f5f9ff709a191c5e75647fb50f617217764ca77d` contains the Genome feature
-implementation. The experiment runner was uncommitted when the promoted
-artifact was created, so the artifact cannot be cryptographically tied to one
-complete committed source revision. `promotion_commit` remains null until a
-future commit is made and must not be interpreted as the artifact-producing
-revision.
+`f5f9ff709a191c5e75647fb50f617217764ca77d` is the feature implementation base
+commit. The experiment runner was uncommitted when the model artifact was
+created, so the artifact cannot be cryptographically tied to one complete
+committed source revision. Commit `87b25f6` later recorded the PRD promotion;
+it is the promotion decision revision, not the artifact-producing revision.
+The manifest retains `promotion_commit: null` as part of its historical
+artifact-provenance record, and the later promotion commit does not
+retroactively change that provenance.
 
 ## Computational tradeoff
 

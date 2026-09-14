@@ -1,329 +1,117 @@
 # Movie Rating Predictor
 
-A pandas-first MovieLens 20M project for predicting whether a user will rate a
-movie at least 4. Every training feature must use only information available
-strictly before the rating event and must be reproducible by the future online
+This project predicts whether a MovieLens 20M user will rate a movie at least
+4 stars. It is an offline production-development (PRD) system built around
+point-in-time-correct features that can later be reproduced by an online
 serving path.
 
-The canonical offline production-development (PRD) model is
-`xgboost_genome_prd_v1`: the unchanged 17-feature Phase 5 contract plus the
-eight-feature Genome addendum. Its machine-readable pointer, complete feature
-contract, temporal splits, training parameters, artifact digest, and evaluation
-metrics live in [`models/prd_model_manifest.json`](models/prd_model_manifest.json).
-The original 17-feature model remains preserved as the historical Phase 5
-baseline.
+## Current PRD status
 
-Genome vectors are treated as `static_external_metadata`; every user-dependent
-Genome aggregate remains strict-prior (`timestamp < t`). Promotion is based on
-offline temporal validation, not online business validation. Phase 6 serving
-work has not started.
+The canonical model is **`xgboost_genome_prd_v1`**, an XGBoost classifier with
+25 predictors: the historical 17-feature rating/catalog baseline plus eight
+Genome features. Its machine-readable source of truth is
+[`models/prd_model_manifest.json`](models/prd_model_manifest.json); the
+executable contract is [`src/training/prd_config.py`](src/training/prd_config.py).
 
-## Setup
+The target is `highRating = (rating >= 4.0)`. Every history-dependent feature
+uses only events with `event.timestamp < prediction_timestamp`. Events sharing
+a timestamp are scored from the same pre-batch state and applied only after the
+complete batch is scored. Movie catalog data and undated Genome vectors use
+documented frozen-snapshot assumptions; user-dependent Genome aggregates remain
+strict-prior.
+
+The model is an offline temporal baseline, not evidence of online business
+lift. Online state and serving work have not started.
+
+## Data
+
+The repository expects the six MovieLens 20M sources (`rating`, `movie`,
+`link`, `tag`, `genome_scores`, and `genome_tags`) under `data/raw/`. Raw CSVs,
+processed Parquet files, and materialized feature datasets are local generated
+data and are ignored by Git.
+
+The main pipeline converts validated source CSVs to typed Parquet, constructs
+canonical entities, replays timestamp batches to materialize leakage-safe
+features, and trains or validates the model against fixed calendar splits:
+
+- train: before 2012-01-01;
+- validation: 2012-01-01 through 2013-12-31;
+- test: 2014-01-01 onward.
+
+The complete temporal semantics are in
+[`docs/TEMPORAL_CONTRACT.md`](docs/TEMPORAL_CONTRACT.md).
+
+## Main result
+
+On the 846,774-row 2014+ test partition, the PRD model achieved:
+
+| Metric | Result |
+|---|---:|
+| PR-AUC | 0.809925 |
+| ROC-AUC | 0.820356 |
+| Log loss | 0.517775 |
+| Brier score | 0.173378 |
+| ECE, 10 uniform bins | 0.023489 |
+
+It improved PR-AUC, ROC-AUC, log loss, and Brier score over the frozen
+17-feature baseline in every test quarter from 2014Q1 through 2015Q1. See the
+[`Genome promotion record`](docs/MODEL_PROMOTION_GENOME_V1.md) for the complete
+comparison, provenance, tradeoffs, and limitations.
+
+## Repository map
+
+```text
+data/                 Local raw, processed, and materialized feature data
+docs/                 Canonical contracts, roadmap, and promotion record
+models/               PRD manifest plus immutable current/historical evidence
+notebooks/            Exploratory EDA and frozen Phase 5 baseline evidence
+src/data/             Source schemas, validation, conversion, and temporal audit
+src/entities/         Canonical entity contracts and relational builders
+src/features/         Catalog, temporal, baseline, Genome, and materialization logic
+src/state/            Point-in-time state, checkpoint, and replay implementation
+src/training/         PRD contract, validation, training, and comparison entrypoints
+src/serving/          Reserved for future online serving work
+tests/                Unit, temporal, replay, materialization, and PRD contract tests
+```
+
+The training layer has deliberately narrow responsibilities:
+
+- `prd_config.py`: canonical executable PRD contract;
+- `modeling.py`: reusable training and evaluation utilities;
+- `train_prd.py`: canonical 25-feature reproduction;
+- `compare_genome.py`: historical 17-vs-25 controlled comparison;
+- `prd.py`: manifest, artifact, and contract validation.
+
+## Setup and reproduction
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
-jupyter notebook
-```
 
-## Repository structure
-
-```text
-movie_rating_predictor/
-├── data/
-│   ├── raw/          # Immutable MovieLens CSV files; local only
-│   ├── processed/    # Validated, typed Parquet datasets
-│   └── features/     # Materialized point-in-time feature/state tables
-├── docs/             # Contracts and implementation plan
-├── notebooks/
-│   ├── *.ipynb       # Exploratory analyses
-│   └── model/        # Ordered Phase 5 modeling notebooks
-├── src/
-│   ├── data/         # Ingestion, schema validation, and Parquet conversion
-│   ├── entities/     # Canonical entity contracts and relational builders
-│   ├── features/     # Shared offline/online feature definitions
-│   ├── state/        # Point-in-time state contracts and update provenance
-│   ├── training/     # Dataset construction, temporal splits, and training
-│   └── serving/      # Future FastAPI application and state updates
-├── tests/
-├── PROJECT_CONTEXT.md
-├── requirements.txt
-└── README.md
-```
-
-Generated data is ignored by Git. Keep the MovieLens source files in
-`data/raw/` and never edit them in place.
-
-## Current status
-
-| Phase | Status |
-|---|---|
-| Phase 0 — Data foundation | COMPLETE |
-| Phase 1 — Temporal contract | COMPLETE |
-| Phase 2 — Entity model | COMPLETE |
-| Phase 3 — Feature Dictionary v1 | COMPLETE |
-| Phase 4A — Expanding global/user/movie history | COMPLETE |
-| Phase 4B — Recency and rolling activity | COMPLETE |
-| Phase 4C — User × target-genre history | COMPLETE |
-| Phase 4D — Static catalog/context | COMPLETE |
-| Phase 4E-1 — Checkpoint schema and persistence/restore | COMPLETE |
-| Phase 4E-2 — Resume/replay and provenance enforcement | COMPLETE |
-| Phase 4E-3 — Uninterrupted/replay equivalence | COMPLETE |
-| Phase 4E-4 — Full feature materialization | COMPLETE |
-| Phase 4F — Controlled Genome metadata features | COMPLETE |
-| Phase 5 — Training dataset and temporal modeling | COMPLETE |
-| Phase 5A — Genome comparison and PRD promotion | COMPLETE |
-| Phase 6+ — Online state and serving | NOT STARTED |
-
-The current engineering roadmap and Phase 4E contract are in
-[`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
-
-## Phase 0: Parquet data layer
-
-With the environment activated, validate and convert all six raw sources:
-
-```bash
+# Build typed Parquet inputs from data/raw/.
 python -m src.data.build_parquet
+
+# Materialize the canonical 25-feature dataset.
+python -m src.features.materialize
+
+# Validate the promoted artifact, manifest, and local feature metadata.
+python -m src.training.prd
+
+# Run the test suite.
+pytest -q -ra -W default
 ```
 
-The command reads the immutable CSV files in `data/raw/`, validates their
-schemas and values, and writes one Snappy-compressed Parquet file per source to
-`data/processed/`. These typed Parquet files are the canonical processed input
-for later phases. Raw files are never modified. Source timestamps contain no
-timezone metadata, so they are preserved as timezone-naive values with an
-unknown source timezone. Genome relevance is stored as `float32`, which may
-introduce the small approximation expected from that representation.
+`python -m src.training.train_prd` retrains the promoted model into a separate
+reproduction directory and is intentionally not part of routine validation.
+`python -m src.training.compare_genome` likewise reproduces the historical
+two-model experiment outside the immutable evidence directory. Both are
+computationally expensive.
 
-## Phase 1: Temporal contract
+## Documentation
 
-Phase 1 defines and tests the strict point-in-time rule used by all future
-features: an event is available only when `event_timestamp < prediction_time`.
-Equal-timestamp events are simultaneous, and rolling windows use `[t - W, t)`.
-See [`docs/TEMPORAL_CONTRACT.md`](docs/TEMPORAL_CONTRACT.md) for the complete
-contract and measured data audit. Reproduce the ratings audit with:
-
-```bash
-python -m src.data.audit_temporal
-```
-
-## Phase 2: Entity definitions
-
-Phase 2 defines canonical users, movies, genres, rating events, relationship
-bridges, and sparse point-in-time state identity. It does not compute predictive
-aggregates. See [`docs/ENTITY_MODEL.md`](docs/ENTITY_MODEL.md) for entity grains,
-keys, cardinalities, cold-start rules, source limitations, and how
-`src/entities` / `src/state` contracts, builders, and updates interact.
-
-## Phase 3: Feature Dictionary v1
-
-Phase 3 specifies the compact first-baseline feature set, exact formulas,
-strict point-in-time rules, online update behavior, dtypes, and leakage-safe
-cold-start fallbacks. It intentionally adds no feature builders. See
-[`docs/FEATURE_DICTIONARY_V1.md`](docs/FEATURE_DICTIONARY_V1.md) for the
-authoritative contract.
-
-## Phase 4A: Expanding historical features
-
-Phase 4A implements the leakage-safe temporal engine for global, user, and
-movie expanding rating count/mean/population-standard-deviation features in
-`src/features/expanding.py`. Equal-timestamp events are scored from one shared
-pre-batch state and applied only after the complete batch is emitted. The
-underlying sparse `count`/`mean`/`M2` state in `src/state/moments.py` has a
-deterministic, JSON-compatible representation. Phase 4E-1 now wraps it in the
-strict checkpoint lifecycle; Phase 4E completes replay orchestration and
-materialization.
-
-## Phase 4B: Recency and rolling activity
-
-Phase 4B extends the same timestamp-batch engine with user rating recency in
-elapsed seconds and canonical movie rating activity over the exact trailing
-`[t - 30 days, t)` interval. Sparse last-user timestamps and rolling movie
-timestamp batches live alongside the expanding state, and current-batch events
-become visible only after every tied row is emitted.
-
-## Phase 4C: User-target-genre history
-
-Phase 4C adds sparse `(userId, genreId)` association moments to the same
-timestamp-batch engine. Each canonical event still updates global, user, and
-movie state exactly once, while its distinct canonical movie-genre memberships
-each receive one auxiliary relationship update. Target-movie genres are
-resolved into association support, an association-weighted historical mean,
-and its delta from the user's historical mean using the same strict pre-batch
-snapshot.
-
-## Phase 4D: Static catalog and event context
-
-Phase 4D resolves target-movie genre count, canonical release year, explicit
-release-year missingness, and age at the scored event timestamp from one
-explicit canonical `movies` plus `movie_genre` snapshot. The builder validates
-and indexes that frozen catalog once, so static resolution cannot duplicate or
-drop canonical rating events and does not alter the timestamp-batch lifecycle.
-`src/features/catalog.py` also provides an order-invariant SHA-256
-`catalog_snapshot_id` covering both canonical tables. Deterministic content
-identity is therefore available and persisted in Phase 4E-1 checkpoints.
-Phase 4E-2 recomputes and enforces it before resume, and Phase 4E-4 records it
-with each materialized feature output.
-
-> A feature row is produced using one explicit frozen canonical catalog
-> snapshot. At present, “versioned” means its content can be identified
-> deterministically; resume-time enforcement is implemented in Phase 4E-2.
-
-## Phase 4E: Checkpoint/replay and full materialization
-
-Phase 4E-1 provides a strict schema-versioned JSON checkpoint around complete
-Phase 4A-C dynamic state. Its `checkpointCutoff` is exclusive: a cutoff `c`
-contains exactly events with timestamps `< c`, never events at `c`. Every
-artifact includes the frozen catalog's lowercase SHA-256 `catalogSnapshotId`;
-timestamps round-trip at nanosecond precision; restore validates state before it
-becomes mutable; and file publication uses atomic replacement. Static Phase 4D
-feature values are not copied per event because they resolve from that catalog
-snapshot.
-
-`CheckpointHistorySession` owns the validated canonical event frame, its
-deterministic source identity, indivisible timestamp batches, and the ordered
-processing cursor. It publishes a checkpoint only when that cursor is exactly
-the complete source prefix before the requested cutoff. Every consumed batch
-requires an explicit movie-genre bridge; bare state and low-level/manual updates
-cannot establish checkpoint eligibility. Checkpoints carry the history source
-SHA-256 plus total and processed progress counts. Trusted source validation
-accepts only MovieLens half-star ratings from `0.5` through `5.0`.
-Phase 4E-2 validates that persisted provenance against the actual complete
-canonical history and catalog before restored state becomes mutable session
-state. Replay then consumes only contiguous source-bound timestamp batches at
-or after the exclusive cutoff. The session retains canonical `ratingEventId`
-membership for each batch and rejects retries, overlaps, skipped ranges, and
-foreign or duplicated events before applying them. A resumed session owns its
-validated catalog and rejects caller attempts to replace its genre bridge.
-
-Every processing API uses one transactional batch lifecycle. It prepares
-rolling expiration and the complete update on an independent state copy, then
-commits state and provenance together, so rejected operations cannot partially
-expire or update live state. `replay_next_batch_features()` uses that lifecycle
-to emit the complete 17-feature Phase 4A-D rows from one shared pre-batch
-snapshot before applying the timestamp batch. These rows remain in memory;
-Phase 4E-4 uses the same feature and state semantics for persisted full-source
-materialization.
-
-Range replay is atomic at the public-call boundary as well. `replay_batches()`
-and `replay_remaining()` prepare every batch on an isolated session copy and
-publish progress only when the full range succeeds.
-
-A rolling expiration watermark plus expired-event count prevents publication
-after over-expiration and detects missing retained activity. Persisted
-timestamps have the exact naïve form
-`YYYY-MM-DDTHH:MM:SS.fffffffff`.
-
-Phase 4E-3 proves that uninterrupted feature construction and checkpoint → JSON
-→ catalog-bound resume → suffix replay emit identical context and all 17 v1
-predictors after alignment by `ratingEventId`. The cutoff matrix covers empty
-prefixes, exact and between-timestamp boundaries, ties, nanosecond-precise
-30-day expiration, final events, and after-all checkpoints. Complete replay is
-also required to reach the same canonical dynamic state and event provenance,
-including under shuffled physical input and catalog ordering and a bounded
-randomized matrix.
-
-Phase 4E-4 provides a bounded-memory production CLI that validates the
-canonical processed ratings, movies, and links Parquet sources, derives the
-canonical `rating_events`, `movies`, and `movie_genre` views, and atomically
-publishes the complete event-grain feature artifact and deterministic metadata:
-
-```bash
-.venv/bin/python -m src.features.materialize
-```
-
-The current v2 default outputs are:
-
-```text
-data/features/rating_features_v2.parquet
-data/features/rating_features_v2.metadata.json
-```
-
-The metadata records source paths and file SHA-256 values (including processed
-`genome_scores`), `historySourceId`,
-`catalogSnapshotId`, contract/schema versions, row and predictor counts,
-timestamp bounds, and the complete output schema. Generated artifacts remain
-ignored by Git.
-
-The v2 path adds only the contracted eight Genome predictors. It does not add
-raw Genome dimensions, embeddings, dimensionality reduction, or change temporal
-splits. A controlled same-protocol comparison promoted the combined 25-feature
-contract to the canonical PRD baseline. The 17-feature Phase 5 model remains a
-frozen historical comparator.
-
-## Phase 5: Training dataset and temporal modeling
-
-Run the numbered notebooks in order:
-
-```text
-notebooks/model/01_training_dataset.ipynb
-notebooks/model/02_temporal_splits.ipynb
-notebooks/model/03_xgboost_baseline.ipynb
-notebooks/model/04_model_evaluation.ipynb
-notebooks/model/05_error_analysis.ipynb
-```
-
-They join the canonical outcome by `ratingEventId`, retain exactly the 17 Phase
-4 predictors, use half-open calendar splits (train before 2012, validation in
-2012–2013, and test from 2014 onward), and persist only lightweight split,
-model, evaluation, and cohort-analysis artifacts under `models/`. These
-notebooks and artifacts remain the historical baseline; they are not rewritten
-by the promotion.
-
-## Current PRD model
-
-`xgboost_genome_prd_v1` uses the same target, split dates, seed, XGBoost
-parameters, early stopping, and native missing-value handling as the historical
-baseline. On the 2014+ test partition it achieved PR-AUC `0.809925`, ROC-AUC
-`0.820356`, log loss `0.517775`, Brier score `0.173378`, and 10-bin ECE
-`0.023489`. It improved all four principal discrimination/probability metrics
-in every test quarter from 2014Q1 through 2015Q1.
-
-`src/training/prd_config.py` is the executable source of truth for the ordered
-features, dtypes, nullability, target, temporal splits, and XGBoost parameters.
-The training and scoring utilities validate the exact 25-column order before
-converting inputs for XGBoost, and verify the ratings Parquet SHA-256 before
-reconstructing labels by `ratingEventId`.
-
-Validate the canonical pointer and reproduce only the promoted model with:
-
-```bash
-.venv/bin/python -m src.training.prd
-.venv/bin/python -m src.training.train_prd
-```
-
-`models/genome_experiment_v1/` is immutable promotion evidence. A historical
-comparison reproduction writes to `models/genome_experiment_reproduction_v1/`
-by default; targeting the evidence directory or a path inside it is rejected
-unless the explicit `--force-canonical-evidence-overwrite` option is supplied.
-
-See [`docs/MODEL_PROMOTION_GENOME_V1.md`](docs/MODEL_PROMOTION_GENOME_V1.md)
-for the decision record, evidence, tradeoffs, limitations, and full comparison
-reproduction command.
-
-TMDb director/actor mappings remain a planned extension after the compact
-leakage-safe baseline. They are not required for Feature Dictionary v1 or Phase
-4E.
-
-## Current notebooks
-
-> **Exploratory analysis only:** temporal calculations in the notebooks do not
-> necessarily satisfy the production temporal contract. In particular, do not
-> reuse tie ordering, current-row rolling values, or full-history quantities as
-> predictive features.
-
-- `01_temporal_high_rate_analysis.ipynb` studies high-rating behavior over
-  calendar time and within each user's rating history.
-- `02_genre_rating_eda.ipynb` studies the multi-label genre taxonomy and rating
-  outcomes by genre.
-
-## Project contracts
-
-See [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) for the phased
-plan, [`docs/TEMPORAL_CONTRACT.md`](docs/TEMPORAL_CONTRACT.md) for the rules that
-all future features must follow, [`docs/ENTITY_MODEL.md`](docs/ENTITY_MODEL.md)
-for the canonical Phase 2 entity/state model, and
-[`docs/FEATURE_DICTIONARY_V1.md`](docs/FEATURE_DICTIONARY_V1.md) for the Phase 3
-feature contract, and
-[`docs/MODEL_PROMOTION_GENOME_V1.md`](docs/MODEL_PROMOTION_GENOME_V1.md) for the
-current PRD promotion record.
+Start with [`docs/README.md`](docs/README.md). The feature dictionary owns exact
+feature definitions and missing-value behavior; the temporal contract owns
+event-time semantics; the promotion record owns model-selection evidence; and
+the implementation plan preserves the phased engineering history and future
+work without duplicating those contracts.
