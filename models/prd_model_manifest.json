@@ -1,0 +1,207 @@
+{
+  "schema_version": 2,
+  "model_name": "xgboost_genome_prd",
+  "model_version": "1",
+  "canonical_name": "xgboost_genome_prd_v1",
+  "status": "PRD",
+  "promotion_date": "2026-09-14",
+  "validation_scope": "offline temporal production baseline; not online business validation",
+  "provenance": {
+    "feature_implementation_base_commit": "f5f9ff709a191c5e75647fb50f617217764ca77d",
+    "experiment_code_status_at_artifact_creation": "uncommitted",
+    "artifact_provenance": "The feature implementation is committed at the base commit, but the experiment runner was uncommitted when this artifact was created; the artifact cannot be cryptographically tied to one complete committed source revision.",
+    "promotion_commit": null
+  },
+  "artifact": {
+    "path": "models/genome_experiment_v1/model_b_genome_25.model.json",
+    "sha256": "53fdfbd3b8b3104dc4cbb74598a40b5f3a206bd09ad3d6d7093481046b4a989a",
+    "feature_names_embedded": false,
+    "feature_types_embedded": false,
+    "input_contract": "src.training.prd_config.PRD_FEATURES",
+    "scoring_interface": "src.training.prd.predict_prd"
+  },
+  "data_sources": {
+    "ratings": {
+      "path": "data/processed/ratings.parquet",
+      "sha256": "67d8f695ae2b729b0b754c285127af3a760ae93f4bb7d274e395936443cd58b2"
+    },
+    "feature_artifact": {
+      "path": "data/features/rating_features_v2.parquet",
+      "metadata_path": "data/features/rating_features_v2.metadata.json"
+    }
+  },
+  "source_experiment": {
+    "comparison": "models/genome_experiment_v1/comparison.json",
+    "comparison_sha256": "6022fa97b1b3a6c703000cbbdb4f26059662a9a490cc881232e74d5092767b83",
+    "candidate_results": "models/genome_experiment_v1/model_b_genome_25.results.json",
+    "candidate_results_sha256": "e7fc245fb59660526ee9ed06b4f49404b9629f00949d22c51f0195d6474489dd",
+    "baseline_results": "models/genome_experiment_v1/model_a_17.results.json",
+    "baseline_results_sha256": "f366699134ea15381174df6f94c011377670041299f5a9f2845195cf03ec885b",
+    "v2_validation": "models/genome_experiment_v1/v2_validation.json",
+    "v2_validation_sha256": "a50c8d5d0fba21dee38b4dddcc9cc24714085f49a4e88ff1b9a71ee2fd29684b",
+    "run_manifest": "models/genome_experiment_v1/run_manifest.json",
+    "run_manifest_sha256": "e164ce47a6b09cce187dba5da5aad603850fcd1a61b73182439ec1e5f99c6a6e"
+  },
+  "historical_baseline": {
+    "name": "phase5_baseline_17",
+    "model": "models/xgboost_baseline_v1.json",
+    "metadata": "models/xgboost_baseline_v1.metadata.json",
+    "evaluation": "models/xgboost_baseline_v1.evaluation.json",
+    "error_analysis": "models/xgboost_baseline_v1.error_analysis.json"
+  },
+  "feature_contract": {
+    "version": "FEATURE_DICTIONARY_V1_GENOME_ADDENDUM",
+    "documentation": "docs/FEATURE_DICTIONARY_V1.md",
+    "materialization_metadata": "data/features/rating_features_v2.metadata.json",
+    "predictor_count": 25,
+    "predictor_names": [
+      "global_rating_count",
+      "global_mean_rating",
+      "user_rating_count",
+      "user_mean_rating",
+      "user_rating_std_pop",
+      "user_seconds_since_last_rating",
+      "movie_rating_count",
+      "movie_mean_rating",
+      "movie_rating_std_pop",
+      "movie_rating_count_30d",
+      "user_target_genre_rating_count",
+      "user_target_genre_mean_rating",
+      "user_target_genre_mean_delta",
+      "movie_genre_count",
+      "movie_release_year",
+      "movie_release_year_missing",
+      "movie_age_years",
+      "genome_user_positive_cosine",
+      "genome_user_negative_cosine",
+      "genome_preference_margin",
+      "genome_nearest_liked_similarity",
+      "genome_top5_liked_similarity",
+      "genome_movie_relevance_mean",
+      "genome_movie_relevance_std",
+      "genome_movie_top10_mean"
+    ],
+    "expected_dtypes": {
+      "global_rating_count": "uint64",
+      "global_mean_rating": "float32",
+      "user_rating_count": "uint64",
+      "user_mean_rating": "float32",
+      "user_rating_std_pop": "float32",
+      "user_seconds_since_last_rating": "float64",
+      "movie_rating_count": "uint64",
+      "movie_mean_rating": "float32",
+      "movie_rating_std_pop": "float32",
+      "movie_rating_count_30d": "uint64",
+      "user_target_genre_rating_count": "uint64",
+      "user_target_genre_mean_rating": "float32",
+      "user_target_genre_mean_delta": "float32",
+      "movie_genre_count": "uint8",
+      "movie_release_year": "Int16",
+      "movie_release_year_missing": "bool",
+      "movie_age_years": "float32",
+      "genome_user_positive_cosine": "float32",
+      "genome_user_negative_cosine": "float32",
+      "genome_preference_margin": "float32",
+      "genome_nearest_liked_similarity": "float32",
+      "genome_top5_liked_similarity": "float32",
+      "genome_movie_relevance_mean": "float32",
+      "genome_movie_relevance_std": "float32",
+      "genome_movie_top10_mean": "float32"
+    },
+    "feature_classes": {
+      "strict_prior_historical": [
+        "global_rating_count",
+        "global_mean_rating",
+        "user_rating_count",
+        "user_mean_rating",
+        "user_rating_std_pop",
+        "user_seconds_since_last_rating",
+        "movie_rating_count",
+        "movie_mean_rating",
+        "movie_rating_std_pop",
+        "movie_rating_count_30d",
+        "user_target_genre_rating_count",
+        "user_target_genre_mean_rating",
+        "user_target_genre_mean_delta",
+        "genome_user_positive_cosine",
+        "genome_user_negative_cosine",
+        "genome_preference_margin",
+        "genome_nearest_liked_similarity",
+        "genome_top5_liked_similarity"
+      ],
+      "static_catalog": [
+        "movie_genre_count",
+        "movie_release_year",
+        "movie_release_year_missing"
+      ],
+      "event_context_from_static_catalog": ["movie_age_years"],
+      "static_external_metadata": [
+        "genome_movie_relevance_mean",
+        "genome_movie_relevance_std",
+        "genome_movie_top10_mean"
+      ]
+    },
+    "nullable_predictors": [
+      "user_seconds_since_last_rating",
+      "movie_release_year",
+      "movie_age_years",
+      "genome_user_positive_cosine",
+      "genome_user_negative_cosine",
+      "genome_preference_margin",
+      "genome_nearest_liked_similarity",
+      "genome_top5_liked_similarity",
+      "genome_movie_relevance_mean",
+      "genome_movie_relevance_std",
+      "genome_movie_top10_mean"
+    ],
+    "genome_metadata_classification": "static_external_metadata",
+    "genome_user_feature_temporal_rule": "rating.timestamp < target_timestamp",
+    "same_timestamp_rule": "score the complete timestamp batch before applying any event in that batch",
+    "target_leakage_rule": "target rating and highRating are forbidden model inputs",
+    "genome_missingness": "preserve NaN; ignore invalid historical Genome vectors; no fitted or future fallback"
+  },
+  "target": {
+    "name": "highRating",
+    "definition": "rating >= 4.0",
+    "source_alignment": "canonical rating joined by 1-based ratingEventId"
+  },
+  "temporal_splits": {
+    "boundary_convention": "start inclusive, end exclusive",
+    "train": {"start": null, "end": "2012-01-01T00:00:00"},
+    "validation": {"start": "2012-01-01T00:00:00", "end": "2014-01-01T00:00:00"},
+    "test": {"start": "2014-01-01T00:00:00", "end": null}
+  },
+  "training": {
+    "random_seed": 42,
+    "best_iteration_zero_based": 599,
+    "effective_tree_count": 600,
+    "missing_value_behavior": "NaN handled natively by XGBoost",
+    "parameters": {
+      "objective": "binary:logistic",
+      "n_estimators": 600,
+      "max_depth": 6,
+      "learning_rate": 0.05,
+      "subsample": 0.8,
+      "colsample_bytree": 0.9,
+      "min_child_weight": 20,
+      "reg_alpha": 0.1,
+      "reg_lambda": 2.0,
+      "max_bin": 128,
+      "tree_method": "hist",
+      "eval_metric": ["logloss", "auc", "aucpr"],
+      "early_stopping_rounds": 30,
+      "random_state": 42,
+      "n_jobs": 8
+    }
+  },
+  "evaluation": {
+    "test_rows": 846774,
+    "test_prevalence": 0.5017277337282439,
+    "test_pr_auc": 0.8099251412341548,
+    "test_roc_auc": 0.8203564904763063,
+    "test_log_loss": 0.5177754163742065,
+    "test_brier": 0.1733776181936264,
+    "test_ece_10_uniform_bins": 0.02348927749133359,
+    "temporal_robustness": "all five out-of-time test quarters improved on PR-AUC, ROC-AUC, log loss, and Brier versus phase5_baseline_17"
+  }
+}

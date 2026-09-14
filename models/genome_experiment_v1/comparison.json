@@ -1,0 +1,672 @@
+{
+  "absolute_metric_deltas_model_b_minus_a": {
+    "test": {
+      "Brier": -0.011898890137672424,
+      "Log Loss": -0.031221628189086914,
+      "PR-AUC": 0.02997977089443593,
+      "ROC-AUC": 0.02508192032701073,
+      "relative_PR-AUC": 0.03843829585317971
+    },
+    "train": {
+      "Brier": -0.01075764000415802,
+      "Log Loss": -0.027742445468902588,
+      "PR-AUC": 0.027441435861369268,
+      "ROC-AUC": 0.023427673731594045
+    },
+    "validation": {
+      "Brier": -0.0102987140417099,
+      "Log Loss": -0.026578962802886963,
+      "PR-AUC": 0.025297136664587105,
+      "ROC-AUC": 0.022455193809214236
+    }
+  },
+  "calibration_ece_delta_model_b_minus_a": -0.004239367272256361,
+  "model_a": {
+    "best_iteration_zero_based": 597,
+    "decision_threshold": null,
+    "decision_threshold_note": "Phase 5 defines no classification threshold",
+    "effective_tree_count": 598,
+    "feature_columns": [
+      "global_rating_count",
+      "global_mean_rating",
+      "user_rating_count",
+      "user_mean_rating",
+      "user_rating_std_pop",
+      "user_seconds_since_last_rating",
+      "movie_rating_count",
+      "movie_mean_rating",
+      "movie_rating_std_pop",
+      "movie_rating_count_30d",
+      "user_target_genre_rating_count",
+      "user_target_genre_mean_rating",
+      "user_target_genre_mean_delta",
+      "movie_genre_count",
+      "movie_release_year",
+      "movie_release_year_missing",
+      "movie_age_years"
+    ],
+    "gain_importance": [
+      {
+        "feature": "movie_mean_rating",
+        "gain": 6463.58154296875,
+        "rank": 1
+      },
+      {
+        "feature": "user_target_genre_mean_rating",
+        "gain": 5806.7939453125,
+        "rank": 2
+      },
+      {
+        "feature": "user_mean_rating",
+        "gain": 697.760009765625,
+        "rank": 3
+      },
+      {
+        "feature": "user_rating_std_pop",
+        "gain": 419.2276916503906,
+        "rank": 4
+      },
+      {
+        "feature": "user_rating_count",
+        "gain": 264.9411926269531,
+        "rank": 5
+      },
+      {
+        "feature": "movie_rating_std_pop",
+        "gain": 264.3923034667969,
+        "rank": 6
+      },
+      {
+        "feature": "global_rating_count",
+        "gain": 228.93475341796875,
+        "rank": 7
+      },
+      {
+        "feature": "user_target_genre_rating_count",
+        "gain": 217.1555938720703,
+        "rank": 8
+      },
+      {
+        "feature": "movie_rating_count_30d",
+        "gain": 212.83370971679688,
+        "rank": 9
+      },
+      {
+        "feature": "movie_release_year",
+        "gain": 185.06723022460938,
+        "rank": 10
+      },
+      {
+        "feature": "global_mean_rating",
+        "gain": 182.68252563476562,
+        "rank": 11
+      },
+      {
+        "feature": "movie_rating_count",
+        "gain": 145.5961151123047,
+        "rank": 12
+      },
+      {
+        "feature": "user_seconds_since_last_rating",
+        "gain": 132.76593017578125,
+        "rank": 13
+      },
+      {
+        "feature": "user_target_genre_mean_delta",
+        "gain": 113.02687072753906,
+        "rank": 14
+      },
+      {
+        "feature": "movie_genre_count",
+        "gain": 98.14793395996094,
+        "rank": 15
+      },
+      {
+        "feature": "movie_age_years",
+        "gain": 70.0582275390625,
+        "rank": 16
+      },
+      {
+        "feature": "movie_release_year_missing",
+        "gain": 0.0,
+        "rank": 17
+      }
+    ],
+    "metrics": {
+      "test": {
+        "Brier": 0.18527650833129883,
+        "Log Loss": 0.5489970445632935,
+        "PR-AUC": 0.7799453703397189,
+        "Prevalence": 0.5017277337282439,
+        "ROC-AUC": 0.7952745701492956,
+        "Rows": 846774
+      },
+      "train": {
+        "Brier": 0.18288113176822662,
+        "Log Loss": 0.5416099429130554,
+        "PR-AUC": 0.783245929084694,
+        "Prevalence": 0.498194136232336,
+        "ROC-AUC": 0.7983139671658235,
+        "Rows": 17822773
+      },
+      "validation": {
+        "Brier": 0.18309734761714935,
+        "Log Loss": 0.5427761673927307,
+        "PR-AUC": 0.797281300826479,
+        "Prevalence": 0.5195391052636326,
+        "ROC-AUC": 0.7973115922215582,
+        "Rows": 1330716
+      }
+    },
+    "missing": "NaN (native XGBoost handling)",
+    "model_params": {
+      "colsample_bytree": 0.9,
+      "early_stopping_rounds": 30,
+      "eval_metric": [
+        "logloss",
+        "auc",
+        "aucpr"
+      ],
+      "learning_rate": 0.05,
+      "max_bin": 128,
+      "max_depth": 6,
+      "min_child_weight": 20,
+      "n_estimators": 600,
+      "n_jobs": 8,
+      "objective": "binary:logistic",
+      "random_state": 42,
+      "reg_alpha": 0.1,
+      "reg_lambda": 2.0,
+      "subsample": 0.8,
+      "tree_method": "hist"
+    },
+    "name": "model_a_17",
+    "package_versions": {
+      "numpy": "2.5.3",
+      "pandas": "3.0.5",
+      "scikit_learn": "1.9.1",
+      "xgboost": "3.4.1"
+    },
+    "random_seed": 42,
+    "test_calibration_bins": {
+      "0.0-0.1": {
+        "absolute_gap": 0.0017716771204152743,
+        "average_prediction": 0.05428285524249077,
+        "observed_prevalence": 0.052511178122075494,
+        "rows": 67319
+      },
+      "0.1-0.2": {
+        "absolute_gap": 0.00031283818740818203,
+        "average_prediction": 0.14974144101142883,
+        "observed_prevalence": 0.14942860282402065,
+        "rows": 72804
+      },
+      "0.2-0.3": {
+        "absolute_gap": 0.0017105270956453977,
+        "average_prediction": 0.25019463896751404,
+        "observed_prevalence": 0.24848411187186864,
+        "rows": 74049
+      },
+      "0.3-0.4": {
+        "absolute_gap": 0.008205813105592152,
+        "average_prediction": 0.35049551725387573,
+        "observed_prevalence": 0.3422897041482836,
+        "rows": 75477
+      },
+      "0.4-0.5": {
+        "absolute_gap": 0.026670120253771357,
+        "average_prediction": 0.4506899118423462,
+        "observed_prevalence": 0.42401979158857483,
+        "rows": 80034
+      },
+      "0.5-0.6": {
+        "absolute_gap": 0.03303654817366375,
+        "average_prediction": 0.5512656569480896,
+        "observed_prevalence": 0.5182291087744259,
+        "rows": 89966
+      },
+      "0.6-0.7": {
+        "absolute_gap": 0.0403427762791041,
+        "average_prediction": 0.6507604122161865,
+        "observed_prevalence": 0.6104176359370824,
+        "rows": 101021
+      },
+      "0.7-0.8": {
+        "absolute_gap": 0.046340500063995704,
+        "average_prediction": 0.750426173210144,
+        "observed_prevalence": 0.7040856731461483,
+        "rows": 111120
+      },
+      "0.8-0.9": {
+        "absolute_gap": 0.04954885681573684,
+        "average_prediction": 0.8494355082511902,
+        "observed_prevalence": 0.7998866514354533,
+        "rows": 112926
+      },
+      "0.9-1.0": {
+        "absolute_gap": 0.042943349594636415,
+        "average_prediction": 0.9358338713645935,
+        "observed_prevalence": 0.8928905217699571,
+        "rows": 62058
+      }
+    },
+    "test_calibration_ece_10_uniform_bins": 0.027728644763589952,
+    "test_quarter_metrics": {
+      "2014Q1": {
+        "Brier": 0.18189889192581177,
+        "Log Loss": 0.5393691062927246,
+        "PR-AUC": 0.8063613934616185,
+        "Prevalence": 0.5302858844550328,
+        "ROC-AUC": 0.7990623727980506,
+        "Rows": 134320
+      },
+      "2014Q2": {
+        "Brier": 0.18444429337978363,
+        "Log Loss": 0.5466490983963013,
+        "PR-AUC": 0.7923744529661886,
+        "Prevalence": 0.5122358505759792,
+        "ROC-AUC": 0.7952731708605001,
+        "Rows": 117973
+      },
+      "2014Q3": {
+        "Brier": 0.18521849811077118,
+        "Log Loss": 0.5485242009162903,
+        "PR-AUC": 0.7979838620491204,
+        "Prevalence": 0.529692917505387,
+        "ROC-AUC": 0.7921521975359307,
+        "Rows": 112771
+      },
+      "2014Q4": {
+        "Brier": 0.18687403202056885,
+        "Log Loss": 0.5529767274856567,
+        "PR-AUC": 0.7788385406983573,
+        "Prevalence": 0.5002679149142673,
+        "ROC-AUC": 0.7938774859739022,
+        "Rows": 197824
+      },
+      "2015Q1": {
+        "Brier": 0.18613025546073914,
+        "Log Loss": 0.5519428849220276,
+        "PR-AUC": 0.7605399400801598,
+        "Prevalence": 0.4737570715005319,
+        "ROC-AUC": 0.7969818518177796,
+        "Rows": 283886
+      }
+    },
+    "training_runtime_seconds": 2550.189896791002
+  },
+  "model_b": {
+    "best_iteration_zero_based": 599,
+    "decision_threshold": null,
+    "decision_threshold_note": "Phase 5 defines no classification threshold",
+    "effective_tree_count": 600,
+    "feature_columns": [
+      "global_rating_count",
+      "global_mean_rating",
+      "user_rating_count",
+      "user_mean_rating",
+      "user_rating_std_pop",
+      "user_seconds_since_last_rating",
+      "movie_rating_count",
+      "movie_mean_rating",
+      "movie_rating_std_pop",
+      "movie_rating_count_30d",
+      "user_target_genre_rating_count",
+      "user_target_genre_mean_rating",
+      "user_target_genre_mean_delta",
+      "movie_genre_count",
+      "movie_release_year",
+      "movie_release_year_missing",
+      "movie_age_years",
+      "genome_user_positive_cosine",
+      "genome_user_negative_cosine",
+      "genome_preference_margin",
+      "genome_nearest_liked_similarity",
+      "genome_top5_liked_similarity",
+      "genome_movie_relevance_mean",
+      "genome_movie_relevance_std",
+      "genome_movie_top10_mean"
+    ],
+    "gain_importance": [
+      {
+        "feature": "genome_preference_margin",
+        "gain": 8434.9248046875,
+        "rank": 1
+      },
+      {
+        "feature": "movie_mean_rating",
+        "gain": 4103.2119140625,
+        "rank": 2
+      },
+      {
+        "feature": "user_target_genre_mean_rating",
+        "gain": 3948.826904296875,
+        "rank": 3
+      },
+      {
+        "feature": "user_mean_rating",
+        "gain": 3811.64453125,
+        "rank": 4
+      },
+      {
+        "feature": "genome_user_positive_cosine",
+        "gain": 1110.7855224609375,
+        "rank": 5
+      },
+      {
+        "feature": "genome_nearest_liked_similarity",
+        "gain": 721.7573852539062,
+        "rank": 6
+      },
+      {
+        "feature": "user_rating_count",
+        "gain": 516.4959716796875,
+        "rank": 7
+      },
+      {
+        "feature": "user_rating_std_pop",
+        "gain": 490.3891296386719,
+        "rank": 8
+      },
+      {
+        "feature": "genome_top5_liked_similarity",
+        "gain": 464.7756652832031,
+        "rank": 9
+      },
+      {
+        "feature": "global_rating_count",
+        "gain": 298.294677734375,
+        "rank": 10
+      },
+      {
+        "feature": "user_target_genre_rating_count",
+        "gain": 249.08807373046875,
+        "rank": 11
+      },
+      {
+        "feature": "global_mean_rating",
+        "gain": 228.9989776611328,
+        "rank": 12
+      },
+      {
+        "feature": "genome_movie_relevance_mean",
+        "gain": 223.4615020751953,
+        "rank": 13
+      },
+      {
+        "feature": "genome_movie_relevance_std",
+        "gain": 218.04200744628906,
+        "rank": 14
+      },
+      {
+        "feature": "genome_user_negative_cosine",
+        "gain": 217.8185272216797,
+        "rank": 15
+      },
+      {
+        "feature": "movie_rating_count_30d",
+        "gain": 172.5242156982422,
+        "rank": 16
+      },
+      {
+        "feature": "movie_age_years",
+        "gain": 158.73483276367188,
+        "rank": 17
+      },
+      {
+        "feature": "user_seconds_since_last_rating",
+        "gain": 150.13735961914062,
+        "rank": 18
+      },
+      {
+        "feature": "genome_movie_top10_mean",
+        "gain": 131.4989776611328,
+        "rank": 19
+      },
+      {
+        "feature": "user_target_genre_mean_delta",
+        "gain": 121.05732727050781,
+        "rank": 20
+      },
+      {
+        "feature": "movie_release_year",
+        "gain": 116.3863525390625,
+        "rank": 21
+      },
+      {
+        "feature": "movie_rating_count",
+        "gain": 111.7611083984375,
+        "rank": 22
+      },
+      {
+        "feature": "movie_rating_std_pop",
+        "gain": 111.25564575195312,
+        "rank": 23
+      },
+      {
+        "feature": "movie_genre_count",
+        "gain": 94.10872650146484,
+        "rank": 24
+      },
+      {
+        "feature": "movie_release_year_missing",
+        "gain": 0.0,
+        "rank": 25
+      }
+    ],
+    "metrics": {
+      "test": {
+        "Brier": 0.1733776181936264,
+        "Log Loss": 0.5177754163742065,
+        "PR-AUC": 0.8099251412341548,
+        "Prevalence": 0.5017277337282439,
+        "ROC-AUC": 0.8203564904763063,
+        "Rows": 846774
+      },
+      "train": {
+        "Brier": 0.1721234917640686,
+        "Log Loss": 0.5138674974441528,
+        "PR-AUC": 0.8106873649460633,
+        "Prevalence": 0.498194136232336,
+        "ROC-AUC": 0.8217416408974175,
+        "Rows": 17822773
+      },
+      "validation": {
+        "Brier": 0.17279863357543945,
+        "Log Loss": 0.5161972045898438,
+        "PR-AUC": 0.8225784374910661,
+        "Prevalence": 0.5195391052636326,
+        "ROC-AUC": 0.8197667860307725,
+        "Rows": 1330716
+      }
+    },
+    "missing": "NaN (native XGBoost handling)",
+    "model_params": {
+      "colsample_bytree": 0.9,
+      "early_stopping_rounds": 30,
+      "eval_metric": [
+        "logloss",
+        "auc",
+        "aucpr"
+      ],
+      "learning_rate": 0.05,
+      "max_bin": 128,
+      "max_depth": 6,
+      "min_child_weight": 20,
+      "n_estimators": 600,
+      "n_jobs": 8,
+      "objective": "binary:logistic",
+      "random_state": 42,
+      "reg_alpha": 0.1,
+      "reg_lambda": 2.0,
+      "subsample": 0.8,
+      "tree_method": "hist"
+    },
+    "name": "model_b_genome_25",
+    "package_versions": {
+      "numpy": "2.5.3",
+      "pandas": "3.0.5",
+      "scikit_learn": "1.9.1",
+      "xgboost": "3.4.1"
+    },
+    "random_seed": 42,
+    "test_calibration_bins": {
+      "0.0-0.1": {
+        "absolute_gap": 0.008020002913394858,
+        "average_prediction": 0.04767890274524689,
+        "observed_prevalence": 0.03965889983185203,
+        "rows": 83260
+      },
+      "0.1-0.2": {
+        "absolute_gap": 0.007892114831139413,
+        "average_prediction": 0.14963503181934357,
+        "observed_prevalence": 0.14174291698820415,
+        "rows": 72568
+      },
+      "0.2-0.3": {
+        "absolute_gap": 0.008474611844330793,
+        "average_prediction": 0.2500969171524048,
+        "observed_prevalence": 0.241622305308074,
+        "rows": 71947
+      },
+      "0.3-0.4": {
+        "absolute_gap": 0.014603135467616157,
+        "average_prediction": 0.3503815233707428,
+        "observed_prevalence": 0.33577838790312664,
+        "rows": 73209
+      },
+      "0.4-0.5": {
+        "absolute_gap": 0.025092723139958584,
+        "average_prediction": 0.45077750086784363,
+        "observed_prevalence": 0.42568477772788504,
+        "rows": 77945
+      },
+      "0.5-0.6": {
+        "absolute_gap": 0.027941306045538905,
+        "average_prediction": 0.5507593154907227,
+        "observed_prevalence": 0.5228180094451838,
+        "rows": 84911
+      },
+      "0.6-0.7": {
+        "absolute_gap": 0.032990085704107996,
+        "average_prediction": 0.6506475806236267,
+        "observed_prevalence": 0.6176574949195187,
+        "rows": 93003
+      },
+      "0.7-0.8": {
+        "absolute_gap": 0.034542441868104734,
+        "average_prediction": 0.7504264712333679,
+        "observed_prevalence": 0.7158840293652632,
+        "rows": 99301
+      },
+      "0.8-0.9": {
+        "absolute_gap": 0.03823570829518319,
+        "average_prediction": 0.8508172035217285,
+        "observed_prevalence": 0.8125814952265453,
+        "rows": 109669
+      },
+      "0.9-1.0": {
+        "absolute_gap": 0.024097044101644705,
+        "average_prediction": 0.9390560984611511,
+        "observed_prevalence": 0.9149590543595064,
+        "rows": 80961
+      }
+    },
+    "test_calibration_ece_10_uniform_bins": 0.02348927749133359,
+    "test_quarter_metrics": {
+      "2014Q1": {
+        "Brier": 0.1722419112920761,
+        "Log Loss": 0.5144166946411133,
+        "PR-AUC": 0.8285072824746322,
+        "Prevalence": 0.5302858844550328,
+        "ROC-AUC": 0.8200494171746355,
+        "Rows": 134320
+      },
+      "2014Q2": {
+        "Brier": 0.17458541691303253,
+        "Log Loss": 0.5211693048477173,
+        "PR-AUC": 0.8150798445474587,
+        "Prevalence": 0.5122358505759792,
+        "ROC-AUC": 0.8164833434866883,
+        "Rows": 117973
+      },
+      "2014Q3": {
+        "Brier": 0.17413300275802612,
+        "Log Loss": 0.5200010538101196,
+        "PR-AUC": 0.8257000124128792,
+        "Prevalence": 0.529692917505387,
+        "ROC-AUC": 0.8164992336107818,
+        "Rows": 112771
+      },
+      "2014Q4": {
+        "Brier": 0.17404285073280334,
+        "Log Loss": 0.519508957862854,
+        "PR-AUC": 0.8100848454413155,
+        "Prevalence": 0.5002679149142673,
+        "ROC-AUC": 0.8205978012385094,
+        "Rows": 197824
+      },
+      "2015Q1": {
+        "Brier": 0.17264944314956665,
+        "Log Loss": 0.5158620476722717,
+        "PR-AUC": 0.794400116924672,
+        "Prevalence": 0.4737570715005319,
+        "ROC-AUC": 0.824421304825868,
+        "Rows": 283886
+      }
+    },
+    "training_runtime_seconds": 2711.368806790997
+  },
+  "test_quarter_absolute_deltas_model_b_minus_a": {
+    "2014Q1": {
+      "Brier": -0.009656980633735657,
+      "Log Loss": -0.024952411651611328,
+      "PR-AUC": 0.02214588901301373,
+      "ROC-AUC": 0.02098704437658494
+    },
+    "2014Q2": {
+      "Brier": -0.009858876466751099,
+      "Log Loss": -0.025479793548583984,
+      "PR-AUC": 0.022705391581270162,
+      "ROC-AUC": 0.021210172626188184
+    },
+    "2014Q3": {
+      "Brier": -0.011085495352745056,
+      "Log Loss": -0.028523147106170654,
+      "PR-AUC": 0.02771615036375874,
+      "ROC-AUC": 0.024347036074851114
+    },
+    "2014Q4": {
+      "Brier": -0.012831181287765503,
+      "Log Loss": -0.033467769622802734,
+      "PR-AUC": 0.031246304742958197,
+      "ROC-AUC": 0.026720315264607275
+    },
+    "2015Q1": {
+      "Brier": -0.013480812311172485,
+      "Log Loss": -0.03608083724975586,
+      "PR-AUC": 0.03386017684451226,
+      "ROC-AUC": 0.027439453008088366
+    }
+  },
+  "training_runtime_delta_seconds": 161.17890999999508,
+  "v2_validation": {
+    "artifact_size_bytes": 1862564920,
+    "genome_null_rates": {
+      "genome_movie_relevance_mean": 0.009990868620077645,
+      "genome_movie_relevance_std": 0.009990868620077645,
+      "genome_movie_top10_mean": 0.009990868620077645,
+      "genome_nearest_liked_similarity": 0.034132851153007335,
+      "genome_preference_margin": 0.04251369094496407,
+      "genome_top5_liked_similarity": 0.034132851153007335,
+      "genome_user_negative_cosine": 0.03208922802665145,
+      "genome_user_positive_cosine": 0.034132851153007335
+    },
+    "original_17_exact_match": true,
+    "predictor_count": 25,
+    "rating_event_ids_complete_unique": true,
+    "row_count": 20000263,
+    "target_prevalence": 0.49976392810434545,
+    "timestamps_nondecreasing": true
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "artifact_size_bytes": 1862564920,
+  "genome_null_rates": {
+    "genome_movie_relevance_mean": 0.009990868620077645,
+    "genome_movie_relevance_std": 0.009990868620077645,
+    "genome_movie_top10_mean": 0.009990868620077645,
+    "genome_nearest_liked_similarity": 0.034132851153007335,
+    "genome_preference_margin": 0.04251369094496407,
+    "genome_top5_liked_similarity": 0.034132851153007335,
+    "genome_user_negative_cosine": 0.03208922802665145,
+    "genome_user_positive_cosine": 0.034132851153007335
+  },
+  "original_17_exact_match": true,
+  "predictor_count": 25,
+  "rating_event_ids_complete_unique": true,
+  "row_count": 20000263,
+  "target_prevalence": 0.49976392810434545,
+  "timestamps_nondecreasing": true
+}

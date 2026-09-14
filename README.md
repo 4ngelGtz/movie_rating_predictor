@@ -5,16 +5,18 @@ movie at least 4. Every training feature must use only information available
 strictly before the rating event and must be reproducible by the future online
 serving path.
 
-Phase 5 is complete. The production v1 feature path materializes all 17
-contracted predictors with checkpoint/replay parity and reproducibility
-metadata, and the numbered Phase 5 notebooks build leakage-safe temporal
-partitions, fit a deterministic XGBoost baseline, and inspect its test-time
-performance, calibration, feature importance, and cohort errors.
+The canonical offline production-development (PRD) model is
+`xgboost_genome_prd_v1`: the unchanged 17-feature Phase 5 contract plus the
+eight-feature Genome addendum. Its machine-readable pointer, complete feature
+contract, temporal splits, training parameters, artifact digest, and evaluation
+metrics live in [`models/prd_model_manifest.json`](models/prd_model_manifest.json).
+The original 17-feature model remains preserved as the historical Phase 5
+baseline.
 
-A Phase 4F addendum now provides a separate eight-feature Genome block and a
-25-predictor v2 materialization path. Genome vectors are treated as static
-external metadata; every user-dependent Genome aggregate remains strict-prior
-(`timestamp < t`). The completed 17-feature Phase 5 baseline remains frozen.
+Genome vectors are treated as `static_external_metadata`; every user-dependent
+Genome aggregate remains strict-prior (`timestamp < t`). Promotion is based on
+offline temporal validation, not online business validation. Phase 6 serving
+work has not started.
 
 ## Setup
 
@@ -71,6 +73,7 @@ Generated data is ignored by Git. Keep the MovieLens source files in
 | Phase 4E-4 — Full feature materialization | COMPLETE |
 | Phase 4F — Controlled Genome metadata features | COMPLETE |
 | Phase 5 — Training dataset and temporal modeling | COMPLETE |
+| Phase 5A — Genome comparison and PRD promotion | COMPLETE |
 | Phase 6+ — Online state and serving | NOT STARTED |
 
 The current engineering roadmap and Phase 4E contract are in
@@ -242,10 +245,11 @@ The metadata records source paths and file SHA-256 values (including processed
 timestamp bounds, and the complete output schema. Generated artifacts remain
 ignored by Git.
 
-The v2 path adds only the contracted eight Genome predictors. It does not
-retrain or tune a model, add raw Genome dimensions, embeddings, dimensionality
-reduction, or change temporal splits. Phase 5 remains the frozen 17-feature
-baseline until a later controlled model comparison.
+The v2 path adds only the contracted eight Genome predictors. It does not add
+raw Genome dimensions, embeddings, dimensionality reduction, or change temporal
+splits. A controlled same-protocol comparison promoted the combined 25-feature
+contract to the canonical PRD baseline. The 17-feature Phase 5 model remains a
+frozen historical comparator.
 
 ## Phase 5: Training dataset and temporal modeling
 
@@ -262,8 +266,40 @@ notebooks/model/05_error_analysis.ipynb
 They join the canonical outcome by `ratingEventId`, retain exactly the 17 Phase
 4 predictors, use half-open calendar splits (train before 2012, validation in
 2012–2013, and test from 2014 onward), and persist only lightweight split,
-model, evaluation, and cohort-analysis artifacts under `models/`. The full
-feature dataset is never duplicated or overwritten.
+model, evaluation, and cohort-analysis artifacts under `models/`. These
+notebooks and artifacts remain the historical baseline; they are not rewritten
+by the promotion.
+
+## Current PRD model
+
+`xgboost_genome_prd_v1` uses the same target, split dates, seed, XGBoost
+parameters, early stopping, and native missing-value handling as the historical
+baseline. On the 2014+ test partition it achieved PR-AUC `0.809925`, ROC-AUC
+`0.820356`, log loss `0.517775`, Brier score `0.173378`, and 10-bin ECE
+`0.023489`. It improved all four principal discrimination/probability metrics
+in every test quarter from 2014Q1 through 2015Q1.
+
+`src/training/prd_config.py` is the executable source of truth for the ordered
+features, dtypes, nullability, target, temporal splits, and XGBoost parameters.
+The training and scoring utilities validate the exact 25-column order before
+converting inputs for XGBoost, and verify the ratings Parquet SHA-256 before
+reconstructing labels by `ratingEventId`.
+
+Validate the canonical pointer and reproduce only the promoted model with:
+
+```bash
+.venv/bin/python -m src.training.prd
+.venv/bin/python -m src.training.train_prd
+```
+
+`models/genome_experiment_v1/` is immutable promotion evidence. A historical
+comparison reproduction writes to `models/genome_experiment_reproduction_v1/`
+by default; targeting the evidence directory or a path inside it is rejected
+unless the explicit `--force-canonical-evidence-overwrite` option is supplied.
+
+See [`docs/MODEL_PROMOTION_GENOME_V1.md`](docs/MODEL_PROMOTION_GENOME_V1.md)
+for the decision record, evidence, tradeoffs, limitations, and full comparison
+reproduction command.
 
 TMDb director/actor mappings remain a planned extension after the compact
 leakage-safe baseline. They are not required for Feature Dictionary v1 or Phase
@@ -288,4 +324,6 @@ plan, [`docs/TEMPORAL_CONTRACT.md`](docs/TEMPORAL_CONTRACT.md) for the rules tha
 all future features must follow, [`docs/ENTITY_MODEL.md`](docs/ENTITY_MODEL.md)
 for the canonical Phase 2 entity/state model, and
 [`docs/FEATURE_DICTIONARY_V1.md`](docs/FEATURE_DICTIONARY_V1.md) for the Phase 3
-feature contract.
+feature contract, and
+[`docs/MODEL_PROMOTION_GENOME_V1.md`](docs/MODEL_PROMOTION_GENOME_V1.md) for the
+current PRD promotion record.

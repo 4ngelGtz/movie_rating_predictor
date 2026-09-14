@@ -1,0 +1,19 @@
+{
+  "experiment": "controlled_genome_incremental_value_v1",
+  "feature_artifact": "data/features/rating_features_v2.parquet",
+  "feature_artifact_size_bytes": 1862564920,
+  "feature_materialization_runtime_seconds": 2403.03,
+  "feature_materialization_peak_memory_bytes": null,
+  "feature_materialization_peak_memory_note": "Unavailable: /usr/bin/time could not read kern.clockrate in the sandbox and did not emit peak RSS.",
+  "baseline_materialization_runtime_seconds": null,
+  "baseline_materialization_runtime_note": "The original Phase 5 materialization runtime was not persisted, so no materialization-runtime comparison is available.",
+  "model_a_training_runtime_seconds": 2550.189896791002,
+  "model_b_training_runtime_seconds": 2711.368806790997,
+  "model_b_training_runtime_delta_seconds": 161.17890999999508,
+  "model_b_training_runtime_relative_change": 0.06320270829138358,
+  "decision_threshold": null,
+  "decision_threshold_note": "Phase 5 did not define a classification threshold, so precision and recall at threshold are not applicable.",
+  "shap_note": "SHAP is not an existing project dependency and was not introduced.",
+  "full_experiment_wall_time_seconds": 32773.53,
+  "full_experiment_wall_time_note": "Wall time includes periods when the host was not actively computing; use the per-model perf_counter runtimes for training-cost comparison."
+}

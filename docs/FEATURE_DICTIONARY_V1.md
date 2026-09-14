@@ -1,8 +1,12 @@
 # Feature Dictionary v1 and Genome addendum
 
-This document is the authoritative Phase 3 feature contract for the first
-modeling baseline. It specifies features; it does not implement feature
-builders, choose temporal split dates, or define a final model.
+This document is the authoritative contract for the original 17 Phase 3
+predictors and the eight-predictor Genome addendum. The combined 25-predictor
+contract is the input to the current PRD model; the original 17-predictor
+contract remains the historical Phase 5 baseline. This document specifies
+features; the canonical model pointer and split/training contract live in
+`models/prd_model_manifest.json`, and the corresponding executable contract is
+`src/training/prd_config.py`.
 
 ## 1. Inherited contracts
 
@@ -118,7 +122,7 @@ predictor. `userId`, `movieId`, and prediction `timestamp` are observation
 context/keys, not numeric model features unless a later contract explicitly
 introduces a valid encoding.
 
-### Genome addendum (8 predictors)
+### Genome addendum: current PRD predictors (8 predictors)
 
 This controlled addendum extends materialization from 17 to 25 predictors
 without changing any baseline feature. `genome_scores` is classified as
@@ -149,6 +153,12 @@ All eight outputs are nullable `float32`. Historical movies without valid
 Genome vectors are ignored rather than imputed. No global, future, target-row,
 or label-derived fallback is used. The top-10 definition requires at least ten
 snapshot tags; MovieLens 20M supplies 1,128.
+
+The controlled same-protocol experiment promoted this addendum together with
+the unchanged 17 predictors as `xgboost_genome_prd_v1`. The manifest identifies
+the exact model artifact and locks the ordered names, dtypes, target, temporal
+splits, and training parameters; the promotion record documents the evidence
+and limitations.
 
 ## 4. Candidate disposition
 

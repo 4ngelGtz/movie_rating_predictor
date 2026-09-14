@@ -266,6 +266,33 @@ and validation early stopping. It achieves 0.7973 validation ROC-AUC and 0.7953
 test ROC-AUC; probability calibration and history/cold-start cohorts are
 measured without changing the Phase 4 feature semantics.
 
+### Phase 5A — Controlled Genome comparison and PRD promotion — COMPLETE
+
+The frozen 17-feature Phase 5 model was reproduced and compared with exactly
+one 25-feature candidate using the same target, temporal partitions, XGBoost
+parameters, seed, early-stopping rule, and missing-value handling. No tuning or
+ablation was performed. The candidate improved test PR-AUC from `0.779945` to
+`0.809925`, ROC-AUC from `0.795275` to `0.820356`, log loss from `0.548997` to
+`0.517775`, Brier score from `0.185277` to `0.173378`, and 10-bin ECE from
+`0.027729` to `0.023489`. PR-AUC, ROC-AUC, log loss, and Brier improved in every
+out-of-time quarter from 2014Q1 through 2015Q1.
+
+`models/prd_model_manifest.json` is the smallest explicit PRD-selection
+mechanism: it names `xgboost_genome_prd_v1`, points to the immutable promoted
+artifact, records its digest and source experiment, and locks the full model
+contract. The original Phase 5 artifacts remain historical evidence.
+`python -m src.training.prd` validates that pointer, and
+`python -m src.training.train_prd` reproduces only the promoted model.
+The executable contract is centralized in `src/training/prd_config.py`; shared
+contract-enforcing load, training, evaluation, and scoring utilities live in
+`src/training/modeling.py`. Comparison reproductions use a separate output
+directory, leaving `models/genome_experiment_v1/` immutable.
+
+The promotion decision and its tradeoffs are recorded in
+`docs/MODEL_PROMOTION_GENOME_V1.md`. This is an offline temporal PRD baseline,
+not online business validation; Phase 6 online state and serving remain not
+started.
+
 ## Phase 6 — Current online state — NOT STARTED
 
 Materialize the latest state required for online prediction after the baseline
