@@ -11,7 +11,8 @@ import pytest
 import src.features.materialize as materialize_module
 from src.entities.builders import build_genres_and_movie_genres, build_movies
 from src.features.catalog import catalog_snapshot_id
-from src.features.expanding import CONTEXT_COLUMNS, FEATURE_COLUMNS
+from src.features.expanding import CONTEXT_COLUMNS, FEATURE_COLUMNS as BASE_FEATURE_COLUMNS
+from src.features.materialize import FEATURE_COLUMNS
 from src.features.materialize import (
     FEATURE_CONTRACT_VERSION,
     FEATURE_DTYPES,
@@ -60,14 +61,28 @@ def write_inputs(directory: Path, *, invalid_rating: bool = False) -> dict[str, 
             "tmdbId": pd.Series([1000, 2000, pd.NA], dtype="UInt32"),
         }
     )
+    genome_rows = [
+        (movie_id, tag_id, float(tag_id == active_tag))
+        for movie_id, active_tag in ((10, 1), (20, 2))
+        for tag_id in range(1, 11)
+    ]
+    genome_scores = pd.DataFrame(
+        {
+            "movieId": pd.Series([row[0] for row in genome_rows], dtype="uint32"),
+            "tagId": pd.Series([row[1] for row in genome_rows], dtype="uint16"),
+            "relevance": pd.Series([row[2] for row in genome_rows], dtype="float32"),
+        }
+    )
     paths = {
         "ratings": directory / "ratings.parquet",
         "movies": directory / "movies.parquet",
         "links": directory / "links.parquet",
+        "genome_scores": directory / "genome_scores.parquet",
     }
     ratings.to_parquet(paths["ratings"], index=False)
     movies.to_parquet(paths["movies"], index=False)
     links.to_parquet(paths["links"], index=False)
+    genome_scores.to_parquet(paths["genome_scores"], index=False)
     return paths
 
 
@@ -84,6 +99,7 @@ def run_materialization(
         ratings_path=paths["ratings"],
         movies_path=paths["movies"],
         links_path=paths["links"],
+        genome_scores_path=paths["genome_scores"],
         output_path=output,
         metadata_path=metadata,
         chunk_size=chunk_size,
@@ -99,7 +115,8 @@ def test_small_fixture_materializes_complete_schema_and_conserves_events(
 
     features = pd.read_parquet(output)
     assert tuple(features.columns) == (*CONTEXT_COLUMNS, *FEATURE_COLUMNS)
-    assert len(FEATURE_COLUMNS) == 17
+    assert len(FEATURE_COLUMNS) == 25
+    assert tuple(FEATURE_COLUMNS[:17]) == BASE_FEATURE_COLUMNS
     assert len(features) == 4
     assert features["ratingEventId"].is_unique
     assert features["ratingEventId"].tolist() == [1, 2, 3, 4]
@@ -120,7 +137,7 @@ def test_metadata_contains_contract_schema_and_provenance(tmp_path: Path) -> Non
     assert metadata["materializationSchemaVersion"] == MATERIALIZATION_SCHEMA_VERSION
     assert metadata["featureContractVersion"] == FEATURE_CONTRACT_VERSION
     assert metadata["rowCount"] == 4
-    assert metadata["predictorCount"] == 17
+    assert metadata["predictorCount"] == 25
     assert metadata["predictorNames"] == list(FEATURE_COLUMNS)
     assert metadata["minTimestamp"] == "2020-01-01T00:00:00.000000000"
     assert metadata["maxTimestamp"] == "2020-02-01T00:00:00.000000000"
@@ -129,7 +146,9 @@ def test_metadata_contains_contract_schema_and_provenance(tmp_path: Path) -> Non
     }
     assert len(metadata["historySourceId"]) == 64
     assert len(metadata["catalogSnapshotId"]) == 64
-    assert set(metadata["canonicalSources"]) == {"links", "movies", "ratings"}
+    assert set(metadata["canonicalSources"]) == {
+        "genome_scores", "links", "movies", "ratings"
+    }
     for name, path in paths.items():
         assert metadata["canonicalSources"][name]["sha256"] == hashlib.sha256(
             path.read_bytes()
@@ -138,6 +157,7 @@ def test_metadata_contains_contract_schema_and_provenance(tmp_path: Path) -> Non
         "ratingEvents",
         "canonicalMovies",
         "movieGenre",
+        "genomeVectors",
     }
 
     rating_events = pd.read_parquet(paths["ratings"])
@@ -183,7 +203,8 @@ def test_chunked_materialization_matches_reference_features(tmp_path: Path) -> N
     )
     rating_events["highRating"] = rating_events["rating"].ge(4.0)
     expected, _, _ = build_materialization(
-        rating_events, canonical_movies, movie_genres
+        rating_events, canonical_movies, movie_genres,
+        pd.read_parquet(paths["genome_scores"]),
     )
     actual = pd.read_parquet(output).sort_values(
         "ratingEventId", ignore_index=True
@@ -203,6 +224,7 @@ def test_invalid_input_does_not_publish_or_replace_artifacts(tmp_path: Path) -> 
             ratings_path=paths["ratings"],
             movies_path=paths["movies"],
             links_path=paths["links"],
+            genome_scores_path=paths["genome_scores"],
             output_path=output,
             metadata_path=metadata,
         )
@@ -234,6 +256,7 @@ def test_generation_failure_after_a_chunk_does_not_publish(
             ratings_path=paths["ratings"],
             movies_path=paths["movies"],
             links_path=paths["links"],
+            genome_scores_path=paths["genome_scores"],
             output_path=output,
             metadata_path=metadata,
             chunk_size=1,
@@ -272,6 +295,7 @@ def test_second_publication_failure_restores_prior_artifact_pair(
             ratings_path=paths["ratings"],
             movies_path=paths["movies"],
             links_path=paths["links"],
+            genome_scores_path=paths["genome_scores"],
             output_path=output,
             metadata_path=metadata,
         )

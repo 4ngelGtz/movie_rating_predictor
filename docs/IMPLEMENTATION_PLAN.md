@@ -201,6 +201,39 @@ Non-blocking follow-ups:
 
 These issues do not affect the correctness of the current 20,000,263-row materialized feature dataset and are deferred until the pipeline is operationalized.
 
+### 4F — Controlled Genome metadata feature block — COMPLETE
+
+Genome belongs conceptually in Phase 4 because this work implements and
+materializes a new feature family; Phase 3 remains the completed specification
+of the original 17-feature baseline. The contract extension is recorded as a
+concise addendum in the existing feature dictionary rather than rewriting the
+historical Phase 3 milestone.
+
+`src/features/genome.py` validates and indexes the canonical processed
+`genome_scores.parquet` source and produces exactly eight nullable `float32`
+predictors. Genome vectors and per-movie statistics are treated as undated
+**static_external_metadata**. This is an explicit modeling assumption and
+limitation because MovieLens Genome scores incorporate user-generated
+information without historical availability timestamps.
+
+The five user-dependent values do not inherit that static treatment for their
+rating inputs: they use only the user's events with `timestamp < t`. Every
+equal-timestamp batch is scored before it updates positive/negative vector sums
+or liked-movie history. Missing target vectors, missing positive/negative
+history, incomplete historical vectors, and zero norms remain missing; no
+future or target-derived fallback is introduced.
+
+Centroid cosine uses incremental per-user vector sums. Nearest and top-five
+liked similarity use one NumPy matrix-vector operation over a user's valid
+historical liked rows, avoiding Python-level pairwise loops. The exact search
+still grows linearly with valid liked history per scored row; no PCA, SVD,
+embedding, ANN, or raw Genome predictor expansion is introduced.
+
+Materialization schema v2 composes the unchanged 17-feature baseline with this
+8-feature block, reads the existing processed Genome Parquet path, and defaults
+to `rating_features_v2.parquet` plus matching metadata. The original v1
+artifact and Phase 5 baseline notebooks remain frozen and are not retrained.
+
 ## Phase 5 — Training dataset and temporal modeling — COMPLETE
 
 The numbered Phase 5 notebooks use the materialized point-in-time features to
@@ -259,5 +292,5 @@ already developed alongside the phases they protect.
   source-qualified person IDs
 - people-derived and other predictor families excluded from Feature Dictionary
   v1
-- tags, genome features, embeddings, and collaborative filtering
+- tag-event features, raw Genome dimensions, embeddings, and collaborative filtering
 - feature-store products and infrastructure beyond demonstrated needs

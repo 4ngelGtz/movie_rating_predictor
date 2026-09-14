@@ -1,4 +1,4 @@
-"""Materialize the complete Phase 4 v1 feature dataset from canonical Parquet.
+"""Materialize the Phase 4 baseline plus Genome addendum from canonical Parquet.
 
 Run from the repository root with ``python -m src.features.materialize``.
 """
@@ -28,20 +28,26 @@ from src.entities.builders import (
 from src.features.catalog import catalog_snapshot_id
 from src.features.expanding import (
     CONTEXT_COLUMNS,
-    FEATURE_COLUMNS,
+    FEATURE_COLUMNS as BASE_FEATURE_COLUMNS,
     build_expanding_rating_features,
     iter_expanding_rating_features,
+)
+from src.features.genome import (
+    GENOME_FEATURE_COLUMNS,
+    build_genome_features,
+    iter_genome_features,
 )
 from src.state.checkpoints import canonical_history_source_id
 from src.state.moments import timestamp_to_string
 
 
 ROOT = Path(__file__).resolve().parents[2]
-MATERIALIZATION_SCHEMA_VERSION = 1
-FEATURE_CONTRACT_VERSION = "FEATURE_DICTIONARY_V1"
-DEFAULT_OUTPUT = ROOT / "data/features/rating_features_v1.parquet"
-DEFAULT_METADATA = ROOT / "data/features/rating_features_v1.metadata.json"
+MATERIALIZATION_SCHEMA_VERSION = 2
+FEATURE_CONTRACT_VERSION = "FEATURE_DICTIONARY_V1_GENOME_ADDENDUM"
+DEFAULT_OUTPUT = ROOT / "data/features/rating_features_v2.parquet"
+DEFAULT_METADATA = ROOT / "data/features/rating_features_v2.metadata.json"
 DEFAULT_CHUNK_SIZE = 250_000
+FEATURE_COLUMNS = (*BASE_FEATURE_COLUMNS, *GENOME_FEATURE_COLUMNS)
 
 FEATURE_DTYPES = {
     "global_rating_count": "uint64",
@@ -61,6 +67,7 @@ FEATURE_DTYPES = {
     "movie_release_year": "Int16",
     "movie_release_year_missing": "bool",
     "movie_age_years": "float32",
+    **{column: "float32" for column in GENOME_FEATURE_COLUMNS},
 }
 
 
@@ -72,11 +79,15 @@ def _validate_feature_schema(features: pd.DataFrame) -> None:
     """Validate exact output columns, predictor names, and contracted dtypes."""
     expected_columns = (*CONTEXT_COLUMNS, *FEATURE_COLUMNS)
     if tuple(features.columns) != expected_columns:
-        raise ValueError("feature output columns do not match the v1 contract")
-    if len(FEATURE_COLUMNS) != 17 or len(FEATURE_DTYPES) != 17:
-        raise ValueError("v1 predictor contract must contain exactly 17 features")
+        raise ValueError("feature output columns do not match the Genome-addendum contract")
+    if len(FEATURE_COLUMNS) != 25 or len(FEATURE_DTYPES) != 25:
+        raise ValueError(
+            "Genome-addendum predictor contract must contain exactly 25 features"
+        )
     if tuple(FEATURE_DTYPES) != FEATURE_COLUMNS:
-        raise ValueError("feature dtype contract names do not match the v1 contract")
+        raise ValueError(
+            "feature dtype contract names do not match the Genome-addendum contract"
+        )
     violations = {
         column: (expected, str(features[column].dtype))
         for column, expected in FEATURE_DTYPES.items()
@@ -106,12 +117,19 @@ def build_materialization(
     rating_events: pd.DataFrame,
     canonical_movies: pd.DataFrame,
     movie_genres: pd.DataFrame,
+    genome_scores: pd.DataFrame,
 ) -> tuple[pd.DataFrame, str, str]:
-    """Build, order, and validate a complete in-memory v1 materialization."""
+    """Build, order, and validate the 17-feature baseline plus Genome block."""
     history_source_id = canonical_history_source_id(rating_events)
     snapshot_id = catalog_snapshot_id(canonical_movies, movie_genres)
-    features = build_expanding_rating_features(
+    base = build_expanding_rating_features(
         rating_events, movie_genres, canonical_movies
+    )
+    genome = build_genome_features(rating_events, genome_scores)
+    if not base.loc[:, CONTEXT_COLUMNS].equals(genome.loc[:, CONTEXT_COLUMNS]):
+        raise ValueError("base and Genome feature rows are not aligned")
+    features = pd.concat(
+        [base, genome.loc[:, GENOME_FEATURE_COLUMNS]], axis=1
     ).sort_values("ratingEventId", kind="stable", ignore_index=True)
     validate_materialization(features, rating_events)
     return features, history_source_id, snapshot_id
@@ -171,8 +189,13 @@ def _metadata(
             "ratingEvents": "ratings + 1-based source-row ratingEventId",
             "canonicalMovies": "movies left-joined with links",
             "movieGenre": "normalized distinct genres derived from movies.genres",
+            "genomeVectors": "complete movieId x sorted tagId vectors from genome_scores",
         },
-        "temporalSemantics": "strict-prior timestamp batches: event.timestamp < prediction timestamp",
+        "temporalSemantics": (
+            "strict-prior timestamp batches for user-dependent features: "
+            "event.timestamp < prediction timestamp; Genome vectors are static "
+            "external metadata"
+        ),
     }
 
 
@@ -268,17 +291,26 @@ def _write_streamed_features(
     rating_events: pd.DataFrame,
     canonical_movies: pd.DataFrame,
     movie_genres: pd.DataFrame,
+    genome_scores: pd.DataFrame,
     chunk_size: int,
 ) -> dict[str, str]:
     writer: pq.ParquetWriter | None = None
     row_count = 0
     try:
-        for chunk in iter_expanding_rating_features(
-            rating_events,
-            movie_genres,
-            canonical_movies,
-            chunk_size=chunk_size,
-        ):
+        base_chunks = iter_expanding_rating_features(
+            rating_events, movie_genres, canonical_movies, chunk_size=chunk_size
+        )
+        genome_chunks = iter_genome_features(
+            rating_events, genome_scores, chunk_size=chunk_size
+        )
+        for base_chunk, genome_chunk in zip(base_chunks, genome_chunks, strict=True):
+            if not base_chunk.loc[:, CONTEXT_COLUMNS].equals(
+                genome_chunk.loc[:, CONTEXT_COLUMNS]
+            ):
+                raise ValueError("base and Genome feature chunks are not aligned")
+            chunk = pd.concat(
+                [base_chunk, genome_chunk.loc[:, GENOME_FEATURE_COLUMNS]], axis=1
+            )
             _validate_feature_schema(chunk)
             if not chunk["ratingEventId"].is_unique:
                 raise ValueError("feature chunk ratingEventId values must be unique")
@@ -319,18 +351,22 @@ def materialize_from_parquet(
     ratings_path: Path,
     movies_path: Path,
     links_path: Path,
+    genome_scores_path: Path,
     output_path: Path,
     metadata_path: Path,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
 ) -> dict[str, Any]:
-    """Read Phase 0 canonical inputs, derive Phase 2 views, and publish v1."""
+    """Read canonical Parquet inputs and publish the Genome-addendum contract."""
     ratings_path = ratings_path.resolve()
     movies_path = movies_path.resolve()
     links_path = links_path.resolve()
+    genome_scores_path = genome_scores_path.resolve()
     source_movies = pd.read_parquet(movies_path, engine="pyarrow")
     links = pd.read_parquet(links_path, engine="pyarrow")
+    genome_scores = pd.read_parquet(genome_scores_path, engine="pyarrow")
     validate_dataframe(source_movies, "movies", SCHEMAS["movies"])
     validate_dataframe(links, "links", SCHEMAS["links"])
+    validate_dataframe(genome_scores, "genome_scores", SCHEMAS["genome_scores"])
     canonical_movies = build_movies(source_movies, links)
     _, movie_genres = build_genres_and_movie_genres(source_movies)
     rating_events = read_rating_events(
@@ -353,6 +389,7 @@ def materialize_from_parquet(
             rating_events=rating_events,
             canonical_movies=canonical_movies,
             movie_genres=movie_genres,
+            genome_scores=genome_scores,
             chunk_size=chunk_size,
         )
         metadata = _metadata(
@@ -366,6 +403,7 @@ def materialize_from_parquet(
                 "ratings": ratings_path,
                 "movies": movies_path,
                 "links": links_path,
+                "genome_scores": genome_scores_path,
             },
         )
         temporary_metadata.write_text(
@@ -397,6 +435,11 @@ def main() -> None:
     parser.add_argument(
         "--links-path", type=Path, default=ROOT / "data/processed/links.parquet"
     )
+    parser.add_argument(
+        "--genome-scores-path",
+        type=Path,
+        default=ROOT / "data/processed/genome_scores.parquet",
+    )
     parser.add_argument("--output-path", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--metadata-path", type=Path, default=DEFAULT_METADATA)
     parser.add_argument("--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE)
@@ -406,6 +449,7 @@ def main() -> None:
         ratings_path=args.ratings_path,
         movies_path=args.movies_path,
         links_path=args.links_path,
+        genome_scores_path=args.genome_scores_path,
         output_path=args.output_path,
         metadata_path=args.metadata_path,
         chunk_size=args.chunk_size,

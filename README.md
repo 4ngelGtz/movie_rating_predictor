@@ -11,6 +11,11 @@ metadata, and the numbered Phase 5 notebooks build leakage-safe temporal
 partitions, fit a deterministic XGBoost baseline, and inspect its test-time
 performance, calibration, feature importance, and cohort errors.
 
+A Phase 4F addendum now provides a separate eight-feature Genome block and a
+25-predictor v2 materialization path. Genome vectors are treated as static
+external metadata; every user-dependent Genome aggregate remains strict-prior
+(`timestamp < t`). The completed 17-feature Phase 5 baseline remains frozen.
+
 ## Setup
 
 ```bash
@@ -64,6 +69,7 @@ Generated data is ignored by Git. Keep the MovieLens source files in
 | Phase 4E-2 — Resume/replay and provenance enforcement | COMPLETE |
 | Phase 4E-3 — Uninterrupted/replay equivalence | COMPLETE |
 | Phase 4E-4 — Full feature materialization | COMPLETE |
+| Phase 4F — Controlled Genome metadata features | COMPLETE |
 | Phase 5 — Training dataset and temporal modeling | COMPLETE |
 | Phase 6+ — Online state and serving | NOT STARTED |
 
@@ -223,22 +229,23 @@ publishes the complete event-grain feature artifact and deterministic metadata:
 .venv/bin/python -m src.features.materialize
 ```
 
-The default outputs are:
+The current v2 default outputs are:
 
 ```text
-data/features/rating_features_v1.parquet
-data/features/rating_features_v1.metadata.json
+data/features/rating_features_v2.parquet
+data/features/rating_features_v2.metadata.json
 ```
 
-The metadata records source paths and file SHA-256 values, `historySourceId`,
+The metadata records source paths and file SHA-256 values (including processed
+`genome_scores`), `historySourceId`,
 `catalogSnapshotId`, contract/schema versions, row and predictor counts,
 timestamp bounds, and the complete output schema. Generated artifacts remain
 ignored by Git.
 
-It does not add new predictors or external enrichment, and it does not include
-modeling, final temporal splits, serving APIs, or feature-store infrastructure.
-Phase 5 constructs labeled event-level data, defines temporal splits, fits an
-XGBoost baseline, and evaluates it.
+The v2 path adds only the contracted eight Genome predictors. It does not
+retrain or tune a model, add raw Genome dimensions, embeddings, dimensionality
+reduction, or change temporal splits. Phase 5 remains the frozen 17-feature
+baseline until a later controlled model comparison.
 
 ## Phase 5: Training dataset and temporal modeling
 

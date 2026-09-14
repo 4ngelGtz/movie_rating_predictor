@@ -1,4 +1,4 @@
-# Feature Dictionary v1
+# Feature Dictionary v1 and Genome addendum
 
 This document is the authoritative Phase 3 feature contract for the first
 modeling baseline. It specifies features; it does not implement feature
@@ -118,6 +118,38 @@ predictor. `userId`, `movieId`, and prediction `timestamp` are observation
 context/keys, not numeric model features unless a later contract explicitly
 introduces a valid encoding.
 
+### Genome addendum (8 predictors)
+
+This controlled addendum extends materialization from 17 to 25 predictors
+without changing any baseline feature. `genome_scores` is classified as
+**static_external_metadata**: its undated relevance snapshot is assumed to be
+available for a movie at every scoring time. This is an explicit modeling
+assumption and source limitation, not a claim of historical availability.
+User-dependent Genome features still read only rating events in `H_u(t)` and
+exclude the target row and every same-timestamp row.
+
+Let `G_m` be the complete relevance vector ordered by `tagId`. A movie is
+Genome-valid only when all snapshot tags are present and its vector has a
+finite nonzero norm. `L_u(t)` contains valid-Genome movies rated at least 4 by
+`u` strictly before `t`; `N_u(t)` is defined analogously for ratings below 4.
+Cosine is the ordinary dot product divided by both vector norms.
+
+| `feature_name` | entity level | source / classification | definition | temporal behavior | missing-value behavior |
+|---|---|---|---|---|---|
+| `genome_user_positive_cosine` | User × target movie | `genome_scores` static_external_metadata + historical ratings | `cosine(G_m, mean_{j in L_u(t)} G_j)` | Historical; only ratings `< t`; update positive sum after the complete timestamp batch | Missing if target vector is unavailable, positive history is empty, or a required norm is zero |
+| `genome_user_negative_cosine` | User × target movie | `genome_scores` static_external_metadata + historical ratings | `cosine(G_m, mean_{j in N_u(t)} G_j)` | Historical; only ratings `< t`; update negative sum after the complete timestamp batch | Missing if target vector is unavailable, negative history is empty, or a required norm is zero |
+| `genome_preference_margin` | User × target movie | Derived from the two historical cosine features | Positive cosine minus negative cosine | Historical; both operands use the same pre-`t` state | Missing unless both cosine operands are present |
+| `genome_nearest_liked_similarity` | User × target movie | `genome_scores` static_external_metadata + historical liked ratings | `max_{j in L_u(t)} cosine(G_m, G_j)` | Historical; only liked ratings `< t` | Missing if target vector is unavailable or no valid liked vector exists |
+| `genome_top5_liked_similarity` | User × target movie | `genome_scores` static_external_metadata + historical liked ratings | Mean of the five largest valid `cosine(G_m, G_j)` values; use all when fewer than five exist | Historical; only liked ratings `< t` | Missing if target vector is unavailable or no valid liked vector exists |
+| `genome_movie_relevance_mean` | Target movie | `genome_scores`; static_external_metadata | Population mean of all values in `G_m` | Static snapshot; no rating history used | Missing when the target has no complete, finite, nonzero Genome vector |
+| `genome_movie_relevance_std` | Target movie | `genome_scores`; static_external_metadata | Population standard deviation (`ddof=0`) of `G_m` | Static snapshot; no rating history used | Missing when the target has no complete, finite, nonzero Genome vector |
+| `genome_movie_top10_mean` | Target movie | `genome_scores`; static_external_metadata | Mean of the ten largest relevance values in `G_m` | Static snapshot; no rating history used | Missing when the target has no complete, finite, nonzero Genome vector |
+
+All eight outputs are nullable `float32`. Historical movies without valid
+Genome vectors are ignored rather than imputed. No global, future, target-row,
+or label-derived fallback is used. The top-10 definition requires at least ten
+snapshot tags; MovieLens 20M supplies 1,128.
+
 ## 4. Candidate disposition
 
 ### Accept for v1
@@ -139,7 +171,7 @@ because they let the model distinguish evidence from fallback values.
 | Per-genre one-hot model columns | Encoding belongs to the Phase 5 model pipeline; the Phase 3 state contract retains canonical genre keys without committing to a changing column vocabulary. |
 | Raw title or title-derived tokens | High-dimensional text processing is outside the interpretable baseline. |
 | Tag event features | Tags obey `< t` but require text normalization, user-generated availability semantics, and online tag ingestion. |
-| Genome scores/tags | Undated snapshot with unknown historical availability and 1,128-dimensional expansion. |
+| Raw Genome score/tag columns | The eight-feature Genome addendum is accepted; raw 1,128-dimensional expansion remains out of scope. |
 | Director/actor and user-person features | No current stable person IDs or mappings; Phase 2 explicitly blocks materialization. |
 | External IDs (`imdbId`, `tmdbId`) | Join keys, not ordinal predictors; retain for future versioned enrichment only. |
 
