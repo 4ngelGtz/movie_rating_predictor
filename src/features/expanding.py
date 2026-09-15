@@ -12,6 +12,9 @@ from pandas.api.types import is_datetime64_any_dtype, is_integer_dtype, is_numer
 
 from src.data.schemas import RATING_VALUES
 from src.features.catalog import CatalogLookups, build_catalog_lookups
+from src.features.movie_rolling import (
+    MOVIE_ROLLING_ADDITIONAL_FEATURE_COLUMNS, resolve_movie_windows,
+)
 from src.state.moments import (
     HistoricalRatingState, # estado point-in-time de la historia de ratings
     RunningMoments,
@@ -173,8 +176,10 @@ def _resolved_static_features(
     )
 
 
-def _empty_feature_values(event_count: int) -> dict[str, np.ndarray]:
-    return {
+def _empty_feature_values(
+    event_count: int, movie_windows: bool = False,
+) -> dict[str, np.ndarray]:
+    values = {
         "global_rating_count": np.empty(event_count, dtype=np.uint64),
         "global_mean_rating": np.empty(event_count, dtype=np.float32),
         "user_rating_count": np.empty(event_count, dtype=np.uint64),
@@ -193,6 +198,15 @@ def _empty_feature_values(event_count: int) -> dict[str, np.ndarray]:
         "movie_release_year_missing": np.empty(event_count, dtype=np.bool_),
         "movie_age_years": np.empty(event_count, dtype=np.float32),
     }
+    if movie_windows:
+        values.update({
+            name: np.empty(
+                event_count,
+                dtype=np.uint64 if name == "movie_rating_count_60d" else np.float32,
+            )
+            for name in MOVIE_ROLLING_ADDITIONAL_FEATURE_COLUMNS
+        })
+    return values
 
 
 def _feature_frame(
@@ -240,11 +254,14 @@ def iter_expanding_rating_features(
     canonical_movies: pd.DataFrame,
     *,
     chunk_size: int = 250_000,
+    movie_windows: bool = False,
 ) -> Iterator[pd.DataFrame]:
     """Yield complete v1 feature rows in chronological, bounded-memory chunks.
 
     Chunk boundaries are extended through timestamp ties so every simultaneous
     batch is scored and applied as one indivisible unit.
+    ``movie_windows=True`` adds the five PRD movie-window outputs using this
+    same traversal and state; the default preserves the historical 17 columns.
     """
     if isinstance(chunk_size, bool) or not isinstance(chunk_size, int):
         raise TypeError("chunk_size must be an integer")
@@ -258,13 +275,17 @@ def iter_expanding_rating_features(
     )
     event_count = len(rating_events)
     if event_count == 0:
-        yield _feature_frame(rating_events, _empty_feature_values(0))
+        yield _feature_frame(rating_events, _empty_feature_values(0, movie_windows))
         return
 
     timestamp_values = rating_events["timestamp"].to_numpy(copy=False)
     order = np.argsort(timestamp_values, kind="stable")
     ordered_timestamps = timestamp_values[order]
-    state = HistoricalRatingState()
+    state = (
+        HistoricalRatingState.for_movie_window_features()
+        if movie_windows
+        else HistoricalRatingState()
+    )
     start = 0
     while start < event_count:
         end = min(start + chunk_size, event_count)
@@ -278,7 +299,7 @@ def iter_expanding_rating_features(
         chunk_events = rating_events.iloc[positions].loc[
             :, (*CONTEXT_COLUMNS, "rating")
         ].reset_index(drop=True)
-        values = _empty_feature_values(len(chunk_events))
+        values = _empty_feature_values(len(chunk_events), movie_windows)
         chunk_timestamps = chunk_events["timestamp"].to_numpy(copy=False)
         user_ids = chunk_events["userId"].to_numpy(copy=False)
         movie_ids = chunk_events["movieId"].to_numpy(copy=False)
@@ -303,6 +324,12 @@ def iter_expanding_rating_features(
                     catalog.genres_by_movie,
                 )
                 static = _resolved_static_features(movie_id, timestamp, catalog)
+                if movie_windows:
+                    for column, value in zip(
+                        MOVIE_ROLLING_ADDITIONAL_FEATURE_COLUMNS,
+                        resolve_movie_windows(state, movie_id), strict=True,
+                    ):
+                        values[column][position] = value
                 for column, value in zip(
                     DYNAMIC_FEATURE_COLUMNS, dynamic, strict=True
                 ):
@@ -333,6 +360,8 @@ def build_expanding_rating_features(
     rating_events: pd.DataFrame,
     movie_genres: pd.DataFrame | None = None,
     canonical_movies: pd.DataFrame | None = None,
+    *,
+    movie_windows: bool = False,
 ) -> pd.DataFrame:
     """Build Phase 4A-D features at one row per canonical rating event.
 
@@ -345,6 +374,13 @@ def build_expanding_rating_features(
     canonical catalog snapshot and must both be supplied, including when the
     valid canonical bridge is empty.
     """
+    if movie_windows:
+        chronological = pd.concat(iter_expanding_rating_features(
+            rating_events, movie_genres, canonical_movies, movie_windows=True,
+        ), ignore_index=True)
+        return chronological.set_index("ratingEventId").loc[
+            rating_events["ratingEventId"]
+        ].reset_index()
     _validate_rating_events(rating_events)
     catalog = build_catalog_lookups(
         canonical_movies,

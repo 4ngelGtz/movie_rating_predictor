@@ -27,6 +27,23 @@ def feature_frame() -> pd.DataFrame:
     )
 
 
+def test_current_prd_registry_contains_ordered_unique_rolling_features() -> None:
+    rolling = (
+        "movie_rating_count_30d",
+        "movie_rating_count_60d",
+        "movie_rating_avg_30d",
+        "movie_rating_avg_60d",
+        "movie_rating_avg_30d_over_60d",
+        "movie_rating_count_30d_over_60d",
+    )
+    assert len(prd_config.PRD_FEATURES) == 30
+    assert len(prd_config.PRD_FEATURES) == len(set(prd_config.PRD_FEATURES))
+    assert all(name in prd_config.PRD_FEATURES for name in rolling)
+    assert tuple(
+        name for name in prd_config.PRD_FEATURES if name in rolling
+    ) == rolling
+
+
 def test_prd_manifest_resolves_exact_promoted_model_and_artifacts() -> None:
     manifest = validate_prd_manifest()
 
@@ -35,10 +52,10 @@ def test_prd_manifest_resolves_exact_promoted_model_and_artifacts() -> None:
     assert manifest["feature_contract"]["predictor_count"] == 25
     assert tuple(
         manifest["feature_contract"]["predictor_names"]
-    ) == prd_config.PRD_FEATURES
+    ) == prd_config.LEGACY_PRD_FEATURES
     assert (
         manifest["feature_contract"]["expected_dtypes"]
-        == prd_config.PRD_FEATURE_DTYPES
+        == prd_config.LEGACY_PRD_FEATURE_DTYPES
     )
     assert manifest["target"] == prd_config.target_contract()
     assert manifest["artifact"]["feature_names_embedded"] is False
@@ -144,9 +161,10 @@ def test_manifest_model_digest_mismatch_is_rejected() -> None:
 def test_manifest_provenance_does_not_claim_an_exact_source_revision() -> None:
     manifest = manifest_copy()
     assert "source_commit" not in manifest
-    assert manifest["provenance"][  # type: ignore[index]
-        "experiment_code_status_at_artifact_creation"
-    ] == "uncommitted"
+    assert manifest["provenance"]["source_revision"] is None  # type: ignore[index]
+    assert manifest["provenance"]["artifact_origin"] == (  # type: ignore[index]
+        "canonical notebook workflow"
+    )
     assert manifest["provenance"]["promotion_commit"] is None  # type: ignore[index]
 
     overstated = copy.deepcopy(manifest)

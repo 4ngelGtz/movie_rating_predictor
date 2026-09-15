@@ -45,6 +45,7 @@ from xgboost import XGBClassifier
 
 from src.training import prd_config
 from src.training.modeling import sha256_file
+from src.training.feature_contracts import GENOME_25, PRD_30, contract_for_names
 
 
 MANIFEST_SCHEMA_VERSION = 3
@@ -141,21 +142,28 @@ def _inspect_model(model_path: Path) -> dict[str, Any]:
     }
 
 
-def _feature_contract(root: Path) -> dict[str, Any]:
+def _feature_contract(root: Path, feature_names: tuple[str, ...]) -> dict[str, Any]:
+    selected = contract_for_names(feature_names)
+    if selected not in (GENOME_25, PRD_30):
+        raise ValueError("unsupported PRD feature contract")
+    version = selected.version
+    dtypes = selected.dtypes
+    classes = selected.classes
+    nullable = selected.nullable
     return {
-        "version": prd_config.FEATURE_CONTRACT_VERSION,
+        "version": version,
         "documentation": prd_config.FEATURE_CONTRACT_DOCUMENTATION,
         "materialization_metadata": _relative_path(
             prd_config.FEATURE_METADATA_PATH, root
         ),
-        "predictor_count": len(prd_config.PRD_FEATURES),
-        "predictor_names": list(prd_config.PRD_FEATURES),
-        "expected_dtypes": dict(prd_config.PRD_FEATURE_DTYPES),
+        "predictor_count": len(feature_names),
+        "predictor_names": list(feature_names),
+        "expected_dtypes": dict(dtypes),
         "feature_classes": {
             key: list(features)
-            for key, features in prd_config.PRD_FEATURE_CLASSES.items()
+            for key, features in classes.items()
         },
-        "nullable_predictors": list(prd_config.PRD_NULLABLE_FEATURES),
+        "nullable_predictors": list(nullable),
         "genome_metadata_classification": (
             prd_config.GENOME_METADATA_CLASSIFICATION
         ),
@@ -179,9 +187,13 @@ def _evaluation(
     evaluation["test_ece_10_uniform_bins"] = results[
         "test_calibration_ece_10_uniform_bins"
     ]
-    evaluation["temporal_robustness"] = _temporal_robustness(
-        comparison, historical_name
-    )
+    if tuple(results["feature_columns"]) == PRD_30.names:
+        evaluation["temporal_robustness"] = prd_config.CURRENT_EVALUATION_SCOPE
+        evaluation["test_quarter_metrics"] = results["test_quarter_metrics"]
+    else:
+        evaluation["temporal_robustness"] = _temporal_robustness(
+            comparison, historical_name
+        )
     return evaluation
 
 
@@ -325,9 +337,9 @@ def build_prd_manifest(
 
     prd_config.validate_split_contract()
     identity = prd_config.canonical_model_identity()
-    contract = _feature_contract(root)
     model_facts = _inspect_model(model_path)
     results = _load_json(results_path)
+    contract = _feature_contract(root, tuple(results["feature_columns"]))
     comparison = _load_json(comparison_path)
     _validate_candidate_consistency(
         model_facts=model_facts,
@@ -391,6 +403,8 @@ def build_prd_manifest(
             run_manifest_path=run_manifest_path,
             root=root,
         ),
+        **({"source_experiment_role": "historical 17-vs-25 selection evidence only"}
+           if tuple(results["feature_columns"]) == PRD_30.names else {}),
         "historical_baseline": historical_baseline,
         "feature_contract": contract,
         "target": prd_config.target_contract(),

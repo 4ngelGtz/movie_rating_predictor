@@ -28,9 +28,11 @@ from sklearn.metrics import (
 import xgboost as xgb
 from xgboost import XGBClassifier
 
-from src.features.expanding import FEATURE_COLUMNS as BASE_FEATURE_COLUMNS
-from src.features.genome import GENOME_FEATURE_COLUMNS
 from src.training import prd_config
+from src.training.feature_contracts import (
+    BASELINE_17, GENOME_25, PRD_30, FeatureContract,
+    contract_for_names, contract_for_version,
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -71,9 +73,7 @@ def prepare_feature_matrix(
     """Require exact names, order, and dtypes before conversion for XGBoost."""
     if tuple(features.columns) != expected_features:
         raise ValueError("model input feature names or order do not match the contract")
-    expected_dtypes = {
-        name: prd_config.PRD_FEATURE_DTYPES[name] for name in expected_features
-    }
+    expected_dtypes = contract_for_names(expected_features).dtypes
     actual_dtypes = {name: str(features[name].dtype) for name in expected_features}
     if actual_dtypes != expected_dtypes:
         raise ValueError("model input feature dtypes do not match the contract")
@@ -81,8 +81,20 @@ def prepare_feature_matrix(
 
 
 def predict_prd(model: XGBClassifier, features: pd.DataFrame) -> np.ndarray:
-    """Score only a frame satisfying the canonical ordered PRD contract."""
-    matrix = prepare_feature_matrix(features, prd_config.PRD_FEATURES)
+    """Score against the matching current or frozen PRD artifact contract."""
+    get_booster = getattr(model, "get_booster", None)
+    model_feature_count = (
+        get_booster().num_features()
+        if get_booster is not None
+        else len(features.columns)
+    )
+    if model_feature_count == len(prd_config.PRD_FEATURES):
+        expected = prd_config.PRD_FEATURES
+    elif model_feature_count == len(prd_config.LEGACY_PRD_FEATURES):
+        expected = prd_config.LEGACY_PRD_FEATURES
+    else:
+        raise ValueError("model feature count does not match a supported PRD contract")
+    matrix = prepare_feature_matrix(features, expected)
     return model.predict_proba(matrix)[:, 1]
 
 
@@ -279,15 +291,22 @@ def validate_v2(
     ratings_path: Path,
     *,
     expected_ratings_sha256: str = prd_config.RATINGS_SOURCE_SHA256,
+    feature_contract: FeatureContract = PRD_30,
 ) -> dict[str, Any]:
     """Stream full-artifact invariants and enforce source identity."""
     validate_ratings_source(ratings_path, expected_ratings_sha256)
     metadata = json.loads(v2_metadata_path.read_text(encoding="utf-8"))
+    artifact_contract = contract_for_version(metadata["featureContractVersion"])
     if (
-        metadata["predictorCount"] != len(prd_config.PRD_FEATURES)
-        or metadata["predictorNames"] != list(prd_config.PRD_FEATURES)
+        metadata["predictorCount"] != len(artifact_contract.names)
+        or metadata["predictorNames"] != list(artifact_contract.names)
     ):
         raise AssertionError("v2 metadata does not contain the exact PRD predictors")
+    if not set(feature_contract.names).issubset(artifact_contract.names):
+        raise ValueError("feature artifact cannot supply the requested contract")
+    if any(artifact_contract.dtypes[name] != dtype
+           for name, dtype in feature_contract.dtypes.items()):
+        raise ValueError("feature artifact dtypes differ from requested contract")
     metadata_rating = metadata["canonicalSources"]["ratings"]
     if (
         metadata_rating["path"] != ratings_path.resolve().relative_to(
@@ -297,6 +316,15 @@ def validate_v2(
     ):
         raise ValueError("v2 metadata ratings source differs from the PRD contract")
     v2 = pq.ParquetFile(v2_path)
+    schema = v2.schema_arrow.empty_table().to_pandas()
+    if tuple(schema.columns) != (
+        "ratingEventId", "userId", "movieId", "timestamp", *artifact_contract.names
+    ):
+        raise ValueError("feature artifact schema names or order differ from contract")
+    if any(str(schema[name].dtype) != dtype
+           or metadata["outputSchema"][name] != dtype
+           for name, dtype in artifact_contract.dtypes.items()):
+        raise ValueError("feature artifact schema dtypes differ from contract")
     if v2.metadata.num_rows != metadata["rowCount"]:
         raise AssertionError("feature artifact row counts differ")
     original_17_exact_match: bool | None = None
@@ -305,7 +333,7 @@ def validate_v2(
         if v1.metadata.num_rows != v2.metadata.num_rows:
             raise AssertionError("v1 and v2 feature artifact row counts differ")
         comparison_columns = [
-            "ratingEventId", "userId", "movieId", "timestamp", *BASE_FEATURE_COLUMNS
+            "ratingEventId", "userId", "movieId", "timestamp", *BASELINE_17.names
         ]
         v1_batches = v1.iter_batches(batch_size=250_000, columns=comparison_columns)
         v2_batches = v2.iter_batches(batch_size=250_000, columns=comparison_columns)
@@ -318,16 +346,16 @@ def validate_v2(
 
     row_count = v2.metadata.num_rows
     seen = np.zeros(row_count, dtype=np.bool_)
-    null_counts = {column: 0 for column in GENOME_FEATURE_COLUMNS}
+    null_counts = {column: 0 for column in artifact_contract.names}
     previous_timestamp: np.datetime64 | None = None
-    scan_columns = ["ratingEventId", "timestamp", *GENOME_FEATURE_COLUMNS]
+    scan_columns = ["ratingEventId", "timestamp", *artifact_contract.names]
     for batch in v2.iter_batches(batch_size=250_000, columns=scan_columns):
         frame = batch.to_pandas()
         event_ids = frame["ratingEventId"].to_numpy(dtype=np.uint64, copy=False)
         if event_ids.min() < 1 or event_ids.max() > row_count:
             raise AssertionError("v2 ratingEventId is outside the canonical range")
         positions = event_ids - 1
-        if seen[positions].any():
+        if seen[positions].any() or len(np.unique(positions)) != len(positions):
             raise AssertionError("v2 contains duplicate ratingEventId values")
         seen[positions] = True
         timestamps = frame["timestamp"].to_numpy(copy=False)
@@ -336,8 +364,10 @@ def validate_v2(
         if (timestamps[1:] < timestamps[:-1]).any():
             raise AssertionError("v2 timestamps are not nondecreasing")
         previous_timestamp = timestamps[-1]
-        for column in GENOME_FEATURE_COLUMNS:
+        for column in artifact_contract.names:
             null_counts[column] += int(frame[column].isna().sum())
+            if column not in artifact_contract.nullable and frame[column].isna().any():
+                raise ValueError(f"non-nullable predictor contains missing values: {column}")
     if not seen.all():
         raise AssertionError("v2 does not conserve every canonical ratingEventId")
 
@@ -346,7 +376,7 @@ def validate_v2(
         raise AssertionError("ratings and v2 row counts differ")
     return {
         "row_count": row_count,
-        "predictor_count": len(prd_config.PRD_FEATURES),
+        "predictor_count": len(feature_contract.names),
         "target_prevalence": float(
             ratings.ge(prd_config.PRD_TARGET_THRESHOLD).mean()
         ),
@@ -356,7 +386,7 @@ def validate_v2(
         "timestamps_nondecreasing": True,
         "genome_null_rates": {
             column: null_counts[column] / row_count
-            for column in GENOME_FEATURE_COLUMNS
+            for column in GENOME_25.names[17:] if column in null_counts
         },
     }
 

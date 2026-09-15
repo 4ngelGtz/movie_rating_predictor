@@ -7,11 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.features.materialize import (
-    FEATURE_COLUMNS,
-    FEATURE_CONTRACT_VERSION,
-    FEATURE_DTYPES,
-)
+from src.training.feature_contracts import BASELINE_17, GENOME_25, PRD_30
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -33,30 +29,20 @@ FEATURE_CONTRACT_DOCUMENTATION = "docs/FEATURE_DICTIONARY_V1.md"
 PRD_INPUT_CONTRACT = "src.training.prd_config.PRD_FEATURES"
 PRD_SCORING_INTERFACE = "src.training.prd.predict_prd"
 MISSING_VALUE_BEHAVIOR = "NaN handled natively by XGBoost"
-PRD_FEATURES = tuple(FEATURE_COLUMNS)
-PRD_FEATURE_DTYPES = dict(FEATURE_DTYPES)
-PRD_NULLABLE_FEATURES = (
-    "user_seconds_since_last_rating",
-    "movie_release_year",
-    "movie_age_years",
-    "genome_user_positive_cosine",
-    "genome_user_negative_cosine",
-    "genome_preference_margin",
-    "genome_nearest_liked_similarity",
-    "genome_top5_liked_similarity",
-    "genome_movie_relevance_mean",
-    "genome_movie_relevance_std",
-    "genome_movie_top10_mean",
+FEATURE_CONTRACT_VERSION = PRD_30.version
+CURRENT_EVALUATION_SCOPE = (
+    "Current artifact metrics only; no improvement claim against the historical "
+    "baseline. The frozen 17-vs-25 comparison is historical selection evidence."
 )
-PRD_FEATURE_CLASSES = {
-    "strict_prior_historical": (
-        *PRD_FEATURES[:13],
-        *PRD_FEATURES[17:22],
-    ),
-    "static_catalog": PRD_FEATURES[13:16],
-    "event_context_from_static_catalog": (PRD_FEATURES[16],),
-    "static_external_metadata": PRD_FEATURES[22:25],
-}
+LEGACY_FEATURE_CONTRACT_VERSION = GENOME_25.version
+PRD_FEATURES = PRD_30.names
+PRD_FEATURE_DTYPES = PRD_30.dtypes
+PRD_NULLABLE_FEATURES = PRD_30.nullable
+PRD_FEATURE_CLASSES = PRD_30.classes
+LEGACY_PRD_FEATURES = GENOME_25.names
+LEGACY_PRD_FEATURE_DTYPES = GENOME_25.dtypes
+LEGACY_PRD_NULLABLE_FEATURES = GENOME_25.nullable
+LEGACY_PRD_FEATURE_CLASSES = GENOME_25.classes
 
 PRD_TARGET_THRESHOLD = 4.0
 PRD_SPLITS = {

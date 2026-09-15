@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from src.features.expanding import FEATURE_COLUMNS as BASE_FEATURE_COLUMNS
+from src.training.feature_contracts import BASELINE_17, GENOME_25
 from src.training import prd_config
 from src.training.modeling import (
     json_value,
@@ -117,6 +117,7 @@ def main() -> None:
         args.v2_metadata,
         args.ratings,
         expected_ratings_sha256=prd_config.RATINGS_SOURCE_SHA256,
+        feature_contract=GENOME_25,
     )
     write_json(output_dir / "v2_validation.json", validation)
     rating_values = pd.read_parquet(args.ratings, columns=["rating"])[
@@ -125,7 +126,7 @@ def main() -> None:
 
     model_a = run_model(
         "model_a_17",
-        BASE_FEATURE_COLUMNS,
+        BASELINE_17.names,
         args.v2_features,
         rating_values,
         output_dir,
@@ -141,7 +142,7 @@ def main() -> None:
 
     model_b = run_model(
         "model_b_genome_25",
-        prd_config.PRD_FEATURES,
+        GENOME_25.names,
         args.v2_features,
         rating_values,
         output_dir,

@@ -9,6 +9,7 @@ from typing import Any
 from xgboost import XGBClassifier
 
 from src.training import prd_config
+from src.training.feature_contracts import GENOME_25, PRD_30, contract_for_version
 from src.training.modeling import predict_prd, sha256_file, validate_ratings_source
 
 
@@ -78,17 +79,20 @@ def validate_prd_manifest(
     _validate_provenance(value, root=root)
 
     contract = value["feature_contract"]
-    if contract["predictor_count"] != len(prd_config.PRD_FEATURES):
-        raise ValueError("PRD model must have exactly 25 predictors")
-    if tuple(contract["predictor_names"]) != prd_config.PRD_FEATURES:
-        raise ValueError("PRD predictor names or order differ from executable config")
-    if contract["expected_dtypes"] != prd_config.PRD_FEATURE_DTYPES:
-        raise ValueError("PRD predictor dtypes differ from executable config")
-    if tuple(contract["nullable_predictors"]) != prd_config.PRD_NULLABLE_FEATURES:
-        raise ValueError("PRD predictor nullability differs from executable config")
+    selected = contract_for_version(contract["version"])
+    if selected not in (GENOME_25, PRD_30):
+        raise ValueError("unsupported PRD feature contract version")
+    contract_names = tuple(contract["predictor_names"])
+    if contract_names != selected.names:
+        raise ValueError("PRD predictor names or order differ from versioned contract")
+    if contract["predictor_count"] != len(selected.names):
+        raise ValueError("PRD predictor count differs from its ordered names")
+    if contract["expected_dtypes"] != selected.dtypes:
+        raise ValueError("PRD predictor dtypes differ from versioned contract")
+    if tuple(contract["nullable_predictors"]) != selected.nullable:
+        raise ValueError("PRD predictor nullability differs from versioned contract")
     expected_classes = {
-        key: list(features)
-        for key, features in prd_config.PRD_FEATURE_CLASSES.items()
+        key: list(features) for key, features in selected.classes.items()
     }
     if contract["feature_classes"] != expected_classes:
         raise ValueError("PRD feature classes differ from executable config")
@@ -153,7 +157,7 @@ def validate_prd_manifest(
         raise ValueError("PRD model artifact has an unexpected feature count")
     names_embedded = value["artifact"]["feature_names_embedded"]
     if names_embedded:
-        if tuple(booster.feature_names or ()) != prd_config.PRD_FEATURES:
+        if tuple(booster.feature_names or ()) != contract_names:
             raise ValueError("embedded model feature names differ from PRD order")
     elif booster.feature_names is not None:
         raise ValueError("manifest incorrectly says model feature names are absent")
@@ -220,9 +224,19 @@ def validate_prd_manifest(
         and comparison["model_b"]["metrics"]["test"] != test_metrics
     ):
         raise ValueError("comparison and candidate test metrics differ")
-    _validate_temporal_robustness(
-        evaluation, comparison, value["historical_baseline"]["name"]
-    )
+    if selected == PRD_30:
+        if value.get("source_experiment_role") != (
+            "historical 17-vs-25 selection evidence only"
+        ):
+            raise ValueError("current model must classify historical comparison evidence")
+        if evaluation["temporal_robustness"] != prd_config.CURRENT_EVALUATION_SCOPE:
+            raise ValueError("current model cannot inherit historical robustness claims")
+        if evaluation.get("test_quarter_metrics") != results["test_quarter_metrics"]:
+            raise ValueError("current model quarterly evaluation differs from its results")
+    else:
+        _validate_temporal_robustness(
+            evaluation, comparison, value["historical_baseline"]["name"]
+        )
 
     for key in ("model", "metadata", "evaluation", "error_analysis"):
         relative_path = value["historical_baseline"][key]
@@ -231,18 +245,24 @@ def validate_prd_manifest(
     if require_materialized_features:
         metadata_path = root / contract["materialization_metadata"]
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        if metadata["predictorCount"] != contract["predictor_count"]:
+        materialized = contract_for_version(metadata["featureContractVersion"])
+        if metadata["predictorCount"] != len(materialized.names):
             raise ValueError("local v2 materialization predictor count changed")
-        if metadata["predictorNames"] != contract["predictor_names"]:
+        if metadata["predictorNames"] != list(materialized.names):
             raise ValueError("local v2 materialization differs from PRD contract")
+        if not set(selected.names).issubset(materialized.names):
+            raise ValueError("local features cannot supply the model's versioned contract")
         if metadata["canonicalSources"]["ratings"] != sources["ratings"]:
             raise ValueError("local v2 ratings source differs from PRD contract")
         output_schema = metadata["outputSchema"]
         if any(
             output_schema[name] != expected
-            for name, expected in contract["expected_dtypes"].items()
+            for name, expected in materialized.dtypes.items()
         ):
             raise ValueError("local v2 dtypes differ from PRD contract")
+        if any(materialized.dtypes[name] != dtype
+               for name, dtype in selected.dtypes.items()):
+            raise ValueError("local features are incompatible with the model dtypes")
     return value
 
 

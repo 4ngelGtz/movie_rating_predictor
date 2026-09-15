@@ -1,9 +1,13 @@
-# Feature Dictionary v1 and Genome addendum
+# Feature Dictionary v1, rolling movie extension, and Genome addendum
 
 This document is the authoritative contract for the original 17 Phase 3
-predictors and the eight-predictor Genome addendum. The combined 25-predictor
-contract is the input to the current PRD model; the original 17-predictor
-contract remains the historical Phase 5 baseline. This document specifies
+predictors, five additional rolling movie predictors, and the eight-predictor
+Genome addendum. Because `movie_rating_count_30d` was already in the original
+baseline, the six approved rolling definitions add five unique columns and the
+canonical materialization contains 30 predictors. The original 17-predictor
+contract remains the historical Phase 5 baseline. The last trained PRD artifact
+still has its frozen 25-predictor contract and must be retrained before it can
+consume the 30-predictor materialization. This document specifies
 features; the canonical model pointer and split/training contract live in
 `models/prd/prd_model_manifest.json`, and the corresponding executable contract
 is `src/training/prd_config.py`.
@@ -38,6 +42,7 @@ For a target event `(u, m, t)`, let
 - `H(t) = {i | t_i < t}` be all legal prior canonical rating events;
 - `H_u(t)` and `H_m(t)` be the subsets for user `u` and movie `m`;
 - `H_m,30(t) = {i | movieId_i=m, t-30 days <= t_i < t}`;
+- `H_m,60(t) = {i | movieId_i=m, t-60 days <= t_i < t}`;
 - `r_i` be the raw rating in `[0.5, 5.0]`;
 - `G(m)` be the set of distinct `genreId` values in the validated
   `movie_genre` bridge for `m`;
@@ -117,6 +122,34 @@ after every event in the timestamp batch has been scored.
 | `movie_release_year_missing` | Static movie context; `movie(movieId)` | `1` iff canonical `releaseYear` is missing, else `0` | Canonical `movie.releaseYear` | Static snapshot | Same snapshot as `movie_release_year`. | Yes under frozen catalog assumption | Recompute only with a versioned catalog deployment. | `true` when year is missing | `bool`, non-null |
 | `movie_age_years` | Movie × prediction context | `(t - Timestamp(releaseYear, Jan 1, 00:00:00)) / (365.2425 days)` | Canonical `movie.releaseYear`; prediction `timestamp` | Static attribute plus current time | Use the target timestamp and frozen release year only. Do not clamp negative values: they reveal source inconsistency rather than silently changing semantics. | Yes under frozen catalog assumption | No rating-state update; compute at read time. | Missing when release year is missing | nullable `float32` years |
 
+### Rolling movie extension: current PRD feature contract
+
+All rolling features use complete timestamp batches and the exact interval
+`[t-N days, t)`. Counts are zero for an empty window. Averages and both ratios
+are missing when their required denominator has no history; no epsilon or
+invented fallback is used.
+
+These six definitions are approved unconditionally; model lift is not an
+inclusion criterion. `HistoricalRatingState` maintains both windows during
+the existing expanding iterator's timestamp traversal. The existing 30-day
+count is emitted once. `movie_rolling.py` contains only output definitions and
+division; it has no independent state, sorting, replay, or eviction engine.
+
+The PRD window extension is enabled with `movie_windows=True`. It uses transient
+counts/sums and requires a full chronological replay. Legacy Phase 4E checkpoints
+keep their original 17-feature format and behavior; attempting to serialize
+extended PRD state raises an explicit error rather than dropping sums or 60-day
+history. Resumable PRD rolling state is not claimed by this implementation.
+
+| `feature_name` | definition | cold-start / zero-denominator behavior | expected type |
+|---|---|---|---|
+| `movie_rating_count_30d` | `n(H_m,30(t))` | `0` | `uint64`, non-null |
+| `movie_rating_count_60d` | `n(H_m,60(t))` | `0` | `uint64`, non-null |
+| `movie_rating_avg_30d` | `mean(H_m,30(t))` | Missing when count is zero | nullable `float32` |
+| `movie_rating_avg_60d` | `mean(H_m,60(t))` | Missing when count is zero | nullable `float32` |
+| `movie_rating_avg_30d_over_60d` | `movie_rating_avg_30d / movie_rating_avg_60d` | Missing when either average is missing | nullable `float32` |
+| `movie_rating_count_30d_over_60d` | `movie_rating_count_30d / movie_rating_count_60d` | Missing when the 60-day count is zero | nullable `float32` |
+
 The feature output must retain `ratingEventId` for audit joins, but it is not a
 predictor. `userId`, `movieId`, and prediction `timestamp` are observation
 context/keys, not numeric model features unless a later contract explicitly
@@ -176,7 +209,6 @@ because they let the model distinguish evidence from fallback values.
 |---|---|
 | User/movie/global high-rating count or rate | Closely related to mean raw rating and directly derived from the target threshold; test incremental value after the baseline. |
 | Genre population count/mean/rate | Adds another overlapping relationship state and fallback layer; first measure whether user-target-genre history adds value. |
-| Multiple recent popularity windows | Correlated feature expansion and additional eviction state; 30 days is one explicit first baseline. |
 | Recent user means, slopes, or first-vs-last drift | EDA motivates drift, but a stable online trend estimator and minimum-support policy need separate design. |
 | Per-genre one-hot model columns | Encoding belongs to the Phase 5 model pipeline; the Phase 3 state contract retains canonical genre keys without committing to a changing column vocabulary. |
 | Raw title or title-derived tokens | High-dimensional text processing is outside the interpretable baseline. |
@@ -201,8 +233,9 @@ because they let the model distinguish evidence from fallback values.
 
 - **Simultaneous events:** every dynamic feature reads one immutable pre-batch
   snapshot. Only after all rows at `t` are emitted may the batch update state.
-- **Cold start:** unseen keys have zero support. All rating means descend through
-  point-in-time state to the fixed `3.5` root; no future aggregate is used.
+- **Cold start:** unseen keys have zero support. Historical expanding rating
+  means descend through point-in-time state to the fixed `3.5` root; rolling
+  movie averages remain NaN when their windows are empty. No future aggregate is used.
   Recency and unavailable release metadata remain genuinely missing.
 - **Global priors:** global count/mean are historical online state, not fitted
   constants. The only fallback constant is the contracted `3.5` baseline prior.
