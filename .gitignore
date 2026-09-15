@@ -76,6 +76,9 @@ Icon?
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
 
+# Docs
+docs/whitepaper/
+
 # IDE / editor
 .idea/
 .vscode/
