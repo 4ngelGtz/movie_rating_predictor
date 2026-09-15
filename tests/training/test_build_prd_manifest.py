@@ -54,10 +54,10 @@ def test_canonical_manifest_is_reproduced_semantically() -> None:
 def test_model_digest_is_derived_from_the_artifact() -> None:
     generated = build_canonical_prd_manifest()
     assert generated["artifact"]["sha256"] == sha256_file(
-        prd_config.EXPERIMENT_CANDIDATE_ARTIFACT_PATH
+        prd_config.PRD_ARTIFACT_PATH
     )
     assert generated["artifact"]["path"] == (
-        "models/experiments/genome_experiment_v1/model_b_genome_25.model.json"
+        "models/prd/xgboost_genome_prd_v1.model.json"
     )
     assert generated["artifact"]["feature_names_embedded"] is False
     assert generated["artifact"]["feature_types_embedded"] is False
@@ -68,14 +68,16 @@ def test_model_digest_is_derived_from_the_artifact() -> None:
 def test_feature_contract_is_derived_from_executable_config() -> None:
     contract = build_canonical_prd_manifest()["feature_contract"]
     assert contract["predictor_count"] == 25
-    assert tuple(contract["predictor_names"]) == prd_config.PRD_FEATURES
-    assert contract["expected_dtypes"] == prd_config.PRD_FEATURE_DTYPES
-    assert tuple(contract["nullable_predictors"]) == prd_config.PRD_NULLABLE_FEATURES
+    assert tuple(contract["predictor_names"]) == prd_config.LEGACY_PRD_FEATURES
+    assert contract["expected_dtypes"] == prd_config.LEGACY_PRD_FEATURE_DTYPES
+    assert tuple(contract["nullable_predictors"]) == (
+        prd_config.LEGACY_PRD_NULLABLE_FEATURES
+    )
     assert contract["feature_classes"] == {
         key: list(features)
-        for key, features in prd_config.PRD_FEATURE_CLASSES.items()
+        for key, features in prd_config.LEGACY_PRD_FEATURE_CLASSES.items()
     }
-    assert contract["version"] == prd_config.FEATURE_CONTRACT_VERSION
+    assert contract["version"] == prd_config.LEGACY_FEATURE_CONTRACT_VERSION
     assert contract["same_timestamp_rule"] == prd_config.SAME_TIMESTAMP_RULE
 
 
@@ -138,14 +140,14 @@ def test_explicit_promotion_requires_a_promotion_date() -> None:
         build_prd_manifest(**kwargs)
 
 
-def test_generated_manifest_preserves_historical_provenance() -> None:
+def test_generated_manifest_preserves_notebook_artifact_provenance() -> None:
     generated = build_canonical_prd_manifest()
-    assert generated["provenance"] == prd_config.historical_artifact_provenance()
+    assert generated["provenance"] == prd_config.notebook_artifact_provenance()
     assert "source_commit" not in generated
     assert generated["provenance"]["promotion_commit"] is None
-    assert generated["provenance"][
-        "experiment_code_status_at_artifact_creation"
-    ] == "uncommitted"
+    assert generated["provenance"]["artifact_origin"] == (
+        "canonical notebook workflow"
+    )
     validate_prd_manifest(generated)
 
     overstated = json.loads(json.dumps(generated))

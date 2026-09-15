@@ -14,7 +14,7 @@ import pandas as pd
 
 from src.training import prd_config
 from src.training.modeling import run_model, validate_output_directory, validate_v2
-from src.training.prd import validate_prd_manifest
+from src.training.feature_contracts import GENOME_25
 
 
 def main() -> None:
@@ -39,13 +39,13 @@ def main() -> None:
     )
     args = parser.parse_args()
     output_dir = validate_output_directory(args.output_dir)
-    manifest = validate_prd_manifest(ratings_path=args.ratings)
     validate_v2(
         None,
         args.v2_features,
         args.v2_metadata,
         args.ratings,
-        expected_ratings_sha256=manifest["data_sources"]["ratings"]["sha256"],
+        expected_ratings_sha256=prd_config.RATINGS_SOURCE_SHA256,
+        feature_contract=GENOME_25,
     )
     rating_values = pd.read_parquet(args.ratings, columns=["rating"])[
         "rating"
@@ -53,7 +53,7 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     result = run_model(
         "xgboost_genome_prd_v1_reproduction",
-        prd_config.PRD_FEATURES,
+        GENOME_25.names,
         args.v2_features,
         rating_values,
         output_dir,

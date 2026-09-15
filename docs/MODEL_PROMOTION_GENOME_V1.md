@@ -1,5 +1,10 @@
 # Genome PRD Model Promotion Record
 
+This record describes the historical 25-feature promotion. The current training
+contract is `PRD_30`; the frozen comparison below is not evaluation evidence for
+a newly trained 30-feature model. Current manifests record their own metrics
+without inheriting this comparison's improvement claim.
+
 ## Decision
 
 Promote the 25-feature Genome model as the project's canonical PRD model and
@@ -92,7 +97,8 @@ retroactively change that provenance.
 
 ## Reproduction
 
-Generate the 25-feature input artifact:
+Generate the current 30-feature input artifact (the historical CLIs select the
+frozen 17/25-feature subsets from it, or accept the original 25-feature artifact):
 
 ```bash
 .venv/bin/python -m src.features.materialize

@@ -21,6 +21,7 @@ from src.features.materialize import (
     materialize_from_parquet,
 )
 from src.state.checkpoints import CheckpointHistorySession
+from src.state.moments import HistoricalRatingState
 
 
 def write_inputs(directory: Path, *, invalid_rating: bool = False) -> dict[str, Path]:
@@ -115,7 +116,7 @@ def test_small_fixture_materializes_complete_schema_and_conserves_events(
 
     features = pd.read_parquet(output)
     assert tuple(features.columns) == (*CONTEXT_COLUMNS, *FEATURE_COLUMNS)
-    assert len(FEATURE_COLUMNS) == 25
+    assert len(FEATURE_COLUMNS) == 30
     assert tuple(FEATURE_COLUMNS[:17]) == BASE_FEATURE_COLUMNS
     assert len(features) == 4
     assert features["ratingEventId"].is_unique
@@ -125,6 +126,22 @@ def test_small_fixture_materializes_complete_schema_and_conserves_events(
     assert features.loc[1, "global_rating_count"] == 1
     assert features.loc[2, "global_rating_count"] == 1
     assert pd.isna(features.loc[1, "movie_release_year"])
+
+
+def test_materialization_updates_movie_history_once_per_timestamp(tmp_path, monkeypatch):
+    paths = write_inputs(tmp_path)
+    calls = []
+    original = HistoricalRatingState._record_movie_activity
+
+    def record(self, timestamp, movies):
+        assert self.supports_movie_window_features
+        calls.append(timestamp)
+        return original(self, timestamp, movies)
+
+    monkeypatch.setattr(HistoricalRatingState, "_record_movie_activity", record)
+    output, _, _ = run_materialization(tmp_path, paths, chunk_size=1)
+    assert calls == list(pd.to_datetime(["2020-01-01", "2020-01-02", "2020-02-01"]))
+    assert pd.read_parquet(output).columns.tolist().count("movie_rating_count_30d") == 1
 
 
 def test_metadata_contains_contract_schema_and_provenance(tmp_path: Path) -> None:
@@ -137,7 +154,7 @@ def test_metadata_contains_contract_schema_and_provenance(tmp_path: Path) -> Non
     assert metadata["materializationSchemaVersion"] == MATERIALIZATION_SCHEMA_VERSION
     assert metadata["featureContractVersion"] == FEATURE_CONTRACT_VERSION
     assert metadata["rowCount"] == 4
-    assert metadata["predictorCount"] == 25
+    assert metadata["predictorCount"] == 30
     assert metadata["predictorNames"] == list(FEATURE_COLUMNS)
     assert metadata["minTimestamp"] == "2020-01-01T00:00:00.000000000"
     assert metadata["maxTimestamp"] == "2020-02-01T00:00:00.000000000"

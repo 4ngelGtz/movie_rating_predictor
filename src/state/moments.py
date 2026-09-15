@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from enum import Enum
 import math
 import re
 from typing import Any
@@ -19,11 +20,19 @@ import pandas as pd
 
 
 MOVIE_ACTIVITY_WINDOW = pd.Timedelta(days=30)
+MOVIE_MEDIUM_WINDOW = pd.Timedelta(days=60)
+MovieActivity = tuple[int, int] | tuple[int, int, float]
+MovieActivityBatch = tuple[pd.Timestamp, tuple[MovieActivity, ...]]
 MAX_ENTITY_ID = 2**32 - 1
 _PERSISTED_TIMESTAMP = re.compile(
     r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{9}\Z"
 )
 _TRUSTED_HISTORY_TOKEN = object()
+
+
+class _MovieWindowCapability(Enum):
+    LEGACY = "legacy"
+    PRD30 = "prd30"
 
 
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
@@ -194,14 +203,42 @@ class HistoricalRatingState:
     )
     last_user_rating: dict[int, pd.Timestamp] = field(default_factory=dict)
     movie_rating_count_30d: dict[int, int] = field(default_factory=dict)
-    _movie_rating_batches_30d: deque[
-        tuple[pd.Timestamp, tuple[tuple[int, int], ...]]
-    ] = field(default_factory=deque)
+    _movie_rating_batches_30d: deque[MovieActivityBatch] = field(default_factory=deque)
     _latest_applied_timestamp: pd.Timestamp | None = None
     _timestamp_tracking_complete: bool = False
     _genre_tracking_complete: bool = False
     _activity_expiration_watermark: pd.Timestamp | None = None
     _activity_expired_count: int = 0
+    # Fixed before replay starts. Legacy checkpoints restore with the default mode.
+    _movie_window_capability: _MovieWindowCapability = field(
+        default=_MovieWindowCapability.LEGACY, repr=False
+    )
+    movie_rating_count_60d: dict[int, int] = field(default_factory=dict)
+    movie_rating_sum_30d: dict[int, float] = field(default_factory=dict)
+    movie_rating_sum_60d: dict[int, float] = field(default_factory=dict)
+    _movie_rating_batches_60d: deque[MovieActivityBatch] = field(default_factory=deque)
+
+    @classmethod
+    def for_movie_window_features(cls) -> HistoricalRatingState:
+        """Create state that tracks all PRD30 movie-window history from replay start."""
+        return cls(_movie_window_capability=_MovieWindowCapability.PRD30)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Keep the replay capability immutable after state initialization."""
+        if name == "_movie_window_capability":
+            try:
+                object.__getattribute__(self, name)
+            except AttributeError:
+                pass
+            else:
+                raise AttributeError("movie-window tracking mode is immutable")
+        object.__setattr__(self, name, value)
+
+    def __delattr__(self, name: str) -> None:
+        """Prevent deletion from reopening the write-once replay capability."""
+        if name == "_movie_window_capability":
+            raise AttributeError("movie-window tracking mode is immutable")
+        object.__delattr__(self, name)
 
     @classmethod
     def _for_trusted_history(cls, *, _token: object) -> HistoricalRatingState:
@@ -217,6 +254,11 @@ class HistoricalRatingState:
     def latest_applied_timestamp(self) -> pd.Timestamp | None:
         """Timestamp of the latest complete batch, if timestamped state exists."""
         return self._latest_applied_timestamp
+
+    @property
+    def supports_movie_window_features(self) -> bool:
+        """Whether complete PRD30 window state has been tracked since replay start."""
+        return self._movie_window_capability is _MovieWindowCapability.PRD30
 
     @property
     def timestamp_tracking_complete(self) -> bool:
@@ -251,18 +293,63 @@ class HistoricalRatingState:
             or expiration_timestamp > self._activity_expiration_watermark
         ):
             self._activity_expiration_watermark = expiration_timestamp
-        while (
-            self._movie_rating_batches_30d
-            and self._movie_rating_batches_30d[0][0] < boundary
-        ):
-            _, movie_counts = self._movie_rating_batches_30d.popleft()
-            for movie_id, count in movie_counts:
-                self._activity_expired_count += count
-                remaining = self.movie_rating_count_30d[movie_id] - count
+        self._activity_expired_count += self._expire_window(
+            self._movie_rating_batches_30d, self.movie_rating_count_30d,
+            boundary,
+            self.movie_rating_sum_30d if self.supports_movie_window_features else None,
+        )
+        if self.supports_movie_window_features:
+            self._expire_window(
+                self._movie_rating_batches_60d, self.movie_rating_count_60d,
+                expiration_timestamp - MOVIE_MEDIUM_WINDOW,
+                self.movie_rating_sum_60d,
+            )
+
+    @staticmethod
+    def _expire_window(
+        queue: deque[MovieActivityBatch],
+        counts: dict[int, int],
+        boundary: pd.Timestamp,
+        sums: dict[int, float] | None = None,
+    ) -> int:
+        """One eviction rule for both windows; retain the exact lower boundary."""
+        expired = 0
+        while queue and queue[0][0] < boundary:
+            _, movies = queue.popleft()
+            for movie in movies:
+                movie_id, count = movie[:2]
+                expired += count
+                remaining = counts[movie_id] - count
                 if remaining:
-                    self.movie_rating_count_30d[movie_id] = remaining
+                    counts[movie_id] = remaining
+                    if sums is not None:
+                        sums[movie_id] -= movie[2]
                 else:
-                    del self.movie_rating_count_30d[movie_id]
+                    del counts[movie_id]
+                    if sums is not None:
+                        del sums[movie_id]
+        return expired
+
+    def _record_movie_activity(
+        self, timestamp: pd.Timestamp, movies: tuple[tuple[int, int, float], ...],
+    ) -> None:
+        """Apply already reduced (movie, count, sum) statistics once per window."""
+        record = (timestamp, movies if self.supports_movie_window_features else tuple(
+            (movie_id, count) for movie_id, count, _ in movies
+        ))
+        self._movie_rating_batches_30d.append(record)
+        windows = [(
+            self.movie_rating_count_30d,
+            self.movie_rating_sum_30d if self.supports_movie_window_features else None,
+        )]
+        if self.supports_movie_window_features:
+            self._movie_rating_batches_60d.append(record)
+            windows.append((self.movie_rating_count_60d, self.movie_rating_sum_60d))
+        for counts, sums in windows:
+            for movie_id, count, rating_sum in movies:
+                counts[movie_id] = counts.get(movie_id, 0) + count
+                if sums is not None:
+                    sums[movie_id] = sums.get(movie_id, 0.0) + rating_sum
 
     def apply_timestamp_batch(
         self,
@@ -361,12 +448,7 @@ class HistoricalRatingState:
                 ).add(rating)
             if batch_timestamp is not None:
                 self.last_user_rating[user_id] = batch_timestamp
-                self._movie_rating_batches_30d.append(
-                    (batch_timestamp, ((movie_id, 1),))
-                )
-                self.movie_rating_count_30d[movie_id] = (
-                    self.movie_rating_count_30d.get(movie_id, 0) + 1
-                )
+                self._record_movie_activity(batch_timestamp, ((movie_id, 1, rating),))
                 self._latest_applied_timestamp = batch_timestamp
             return
 
@@ -400,18 +482,19 @@ class HistoricalRatingState:
         if batch_timestamp is not None:
             for user_id in sorted(users):
                 self.last_user_rating[user_id] = batch_timestamp
-            movie_counts = tuple(
-                (movie_id, len(movies[movie_id])) for movie_id in sorted(movies)
-            )
-            self._movie_rating_batches_30d.append((batch_timestamp, movie_counts))
-            for movie_id, count in movie_counts:
-                self.movie_rating_count_30d[movie_id] = (
-                    self.movie_rating_count_30d.get(movie_id, 0) + count
-                )
+            self._record_movie_activity(batch_timestamp, tuple(
+                (movie_id, len(movies[movie_id]), math.fsum(movies[movie_id]))
+                for movie_id in sorted(movies)
+            ))
             self._latest_applied_timestamp = batch_timestamp
 
     def to_dict(self) -> dict[str, Any]:
         """Return deterministic, JSON-compatible checkpoint content."""
+        if self.supports_movie_window_features:
+            raise ValueError(
+                "PRD rolling sums/60d state requires full replay; "
+                "legacy checkpoints support only the 17-feature state"
+            )
         return {
             "global": self.global_moments.to_dict(),
             "users": [
