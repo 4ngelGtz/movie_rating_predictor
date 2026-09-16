@@ -19,6 +19,7 @@ PRD_NAMES = (
     "01_training_dataset.ipynb",
     "02_temporal_splits.ipynb",
     "03_xgboost_training.ipynb",
+    "04_1_shap_model_interpretation.ipynb",
     "04_model_evaluation.ipynb",
     "05_model_artifact_and_manifest.ipynb",
 )

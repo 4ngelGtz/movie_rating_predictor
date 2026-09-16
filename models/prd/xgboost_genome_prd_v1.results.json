@@ -21,6 +21,11 @@
     "movie_release_year",
     "movie_release_year_missing",
     "movie_age_years",
+    "movie_rating_count_60d",
+    "movie_rating_avg_30d",
+    "movie_rating_avg_60d",
+    "movie_rating_avg_30d_over_60d",
+    "movie_rating_count_30d_over_60d",
     "genome_user_positive_cosine",
     "genome_user_negative_cosine",
     "genome_preference_margin",
@@ -33,153 +38,178 @@
   "gain_importance": [
     {
       "feature": "genome_preference_margin",
-      "gain": 8434.9248046875,
+      "gain": 8876.8095703125,
       "rank": 1
     },
     {
-      "feature": "movie_mean_rating",
-      "gain": 4103.2119140625,
+      "feature": "movie_rating_avg_60d",
+      "gain": 4828.74462890625,
       "rank": 2
     },
     {
-      "feature": "user_target_genre_mean_rating",
-      "gain": 3948.826904296875,
+      "feature": "user_mean_rating",
+      "gain": 3779.002197265625,
       "rank": 3
     },
     {
-      "feature": "user_mean_rating",
-      "gain": 3811.64453125,
+      "feature": "user_target_genre_mean_rating",
+      "gain": 2970.803955078125,
       "rank": 4
     },
     {
-      "feature": "genome_user_positive_cosine",
-      "gain": 1110.7855224609375,
+      "feature": "movie_mean_rating",
+      "gain": 2650.2197265625,
       "rank": 5
     },
     {
-      "feature": "genome_nearest_liked_similarity",
-      "gain": 721.7573852539062,
+      "feature": "movie_rating_avg_30d",
+      "gain": 775.2257080078125,
       "rank": 6
     },
     {
-      "feature": "user_rating_count",
-      "gain": 516.4959716796875,
+      "feature": "genome_nearest_liked_similarity",
+      "gain": 698.6365966796875,
       "rank": 7
     },
     {
-      "feature": "user_rating_std_pop",
-      "gain": 490.3891296386719,
+      "feature": "genome_top5_liked_similarity",
+      "gain": 498.59759521484375,
       "rank": 8
     },
     {
-      "feature": "genome_top5_liked_similarity",
-      "gain": 464.7756652832031,
+      "feature": "user_rating_count",
+      "gain": 496.5523376464844,
       "rank": 9
     },
     {
-      "feature": "global_rating_count",
-      "gain": 298.294677734375,
+      "feature": "user_rating_std_pop",
+      "gain": 479.3076171875,
       "rank": 10
     },
     {
-      "feature": "user_target_genre_rating_count",
-      "gain": 249.08807373046875,
+      "feature": "genome_user_positive_cosine",
+      "gain": 386.9121398925781,
       "rank": 11
     },
     {
-      "feature": "global_mean_rating",
-      "gain": 228.9989776611328,
+      "feature": "movie_rating_count_30d",
+      "gain": 258.52142333984375,
       "rank": 12
     },
     {
-      "feature": "genome_movie_relevance_mean",
-      "gain": 223.4615020751953,
+      "feature": "user_target_genre_rating_count",
+      "gain": 256.64202880859375,
       "rank": 13
     },
     {
-      "feature": "genome_movie_relevance_std",
-      "gain": 218.04200744628906,
+      "feature": "global_rating_count",
+      "gain": 238.19033813476562,
       "rank": 14
     },
     {
-      "feature": "genome_user_negative_cosine",
-      "gain": 217.8185272216797,
+      "feature": "global_mean_rating",
+      "gain": 232.5886688232422,
       "rank": 15
     },
     {
-      "feature": "movie_rating_count_30d",
-      "gain": 172.5242156982422,
+      "feature": "movie_age_years",
+      "gain": 152.08255004882812,
       "rank": 16
     },
     {
-      "feature": "movie_age_years",
-      "gain": 158.73483276367188,
+      "feature": "user_seconds_since_last_rating",
+      "gain": 150.18003845214844,
       "rank": 17
     },
     {
-      "feature": "user_seconds_since_last_rating",
-      "gain": 150.13735961914062,
+      "feature": "genome_movie_relevance_std",
+      "gain": 126.89179992675781,
       "rank": 18
     },
     {
       "feature": "genome_movie_top10_mean",
-      "gain": 131.4989776611328,
+      "gain": 124.75287628173828,
       "rank": 19
     },
     {
-      "feature": "user_target_genre_mean_delta",
-      "gain": 121.05732727050781,
+      "feature": "movie_release_year",
+      "gain": 107.21627807617188,
       "rank": 20
     },
     {
-      "feature": "movie_release_year",
-      "gain": 116.3863525390625,
+      "feature": "genome_movie_relevance_mean",
+      "gain": 102.25359344482422,
       "rank": 21
     },
     {
-      "feature": "movie_rating_count",
-      "gain": 111.7611083984375,
+      "feature": "movie_rating_std_pop",
+      "gain": 101.97542572021484,
       "rank": 22
     },
     {
-      "feature": "movie_rating_std_pop",
-      "gain": 111.25564575195312,
+      "feature": "movie_rating_count",
+      "gain": 89.57880401611328,
       "rank": 23
     },
     {
-      "feature": "movie_genre_count",
-      "gain": 94.10872650146484,
+      "feature": "movie_rating_count_60d",
+      "gain": 87.39119720458984,
       "rank": 24
+    },
+    {
+      "feature": "movie_genre_count",
+      "gain": 86.18439483642578,
+      "rank": 25
+    },
+    {
+      "feature": "user_target_genre_mean_delta",
+      "gain": 84.09674072265625,
+      "rank": 26
+    },
+    {
+      "feature": "movie_rating_count_30d_over_60d",
+      "gain": 73.54183197021484,
+      "rank": 27
+    },
+    {
+      "feature": "genome_user_negative_cosine",
+      "gain": 67.92063903808594,
+      "rank": 28
+    },
+    {
+      "feature": "movie_rating_avg_30d_over_60d",
+      "gain": 23.984207153320312,
+      "rank": 29
     },
     {
       "feature": "movie_release_year_missing",
       "gain": 0.0,
-      "rank": 25
+      "rank": 30
     }
   ],
   "metrics": {
     "test": {
-      "Brier": 0.1733776181936264,
-      "Log Loss": 0.5177754163742065,
-      "PR-AUC": 0.8099251412341548,
+      "Brier": 0.17279574275016785,
+      "Log Loss": 0.5161606669425964,
+      "PR-AUC": 0.811060018195281,
       "Prevalence": 0.5017277337282439,
-      "ROC-AUC": 0.8203564904763063,
+      "ROC-AUC": 0.8212527265312256,
       "Rows": 846774
     },
     "train": {
-      "Brier": 0.1721234917640686,
-      "Log Loss": 0.5138674974441528,
-      "PR-AUC": 0.8106873649460633,
+      "Brier": 0.17194467782974243,
+      "Log Loss": 0.5133964419364929,
+      "PR-AUC": 0.8110976388500483,
       "Prevalence": 0.498194136232336,
-      "ROC-AUC": 0.8217416408974175,
+      "ROC-AUC": 0.822110105745516,
       "Rows": 17822773
     },
     "validation": {
-      "Brier": 0.17279863357543945,
-      "Log Loss": 0.5161972045898438,
-      "PR-AUC": 0.8225784374910661,
+      "Brier": 0.17269642651081085,
+      "Log Loss": 0.5159400105476379,
+      "PR-AUC": 0.8228684758200132,
       "Prevalence": 0.5195391052636326,
-      "ROC-AUC": 0.8197667860307725,
+      "ROC-AUC": 0.8199752079694568,
       "Rows": 1330716
     }
   },
@@ -215,106 +245,106 @@
   "random_seed": 42,
   "test_calibration_bins": {
     "0.0-0.1": {
-      "absolute_gap": 0.008020002913394858,
-      "average_prediction": 0.04767890274524689,
-      "observed_prevalence": 0.03965889983185203,
-      "rows": 83260
+      "absolute_gap": 0.006812892795481265,
+      "average_prediction": 0.04736045002937317,
+      "observed_prevalence": 0.040547557233891904,
+      "rows": 84740
     },
     "0.1-0.2": {
-      "absolute_gap": 0.007892114831139413,
-      "average_prediction": 0.14963503181934357,
-      "observed_prevalence": 0.14174291698820415,
-      "rows": 72568
+      "absolute_gap": 0.007426903287280823,
+      "average_prediction": 0.14946474134922028,
+      "observed_prevalence": 0.14203783806193945,
+      "rows": 72361
     },
     "0.2-0.3": {
-      "absolute_gap": 0.008474611844330793,
-      "average_prediction": 0.2500969171524048,
-      "observed_prevalence": 0.241622305308074,
-      "rows": 71947
+      "absolute_gap": 0.00917843839748736,
+      "average_prediction": 0.2502264976501465,
+      "observed_prevalence": 0.24104805925265912,
+      "rows": 71828
     },
     "0.3-0.4": {
-      "absolute_gap": 0.014603135467616157,
-      "average_prediction": 0.3503815233707428,
-      "observed_prevalence": 0.33577838790312664,
-      "rows": 73209
+      "absolute_gap": 0.013049151868821884,
+      "average_prediction": 0.350364089012146,
+      "observed_prevalence": 0.3373149371433241,
+      "rows": 73421
     },
     "0.4-0.5": {
-      "absolute_gap": 0.025092723139958584,
-      "average_prediction": 0.45077750086784363,
-      "observed_prevalence": 0.42568477772788504,
-      "rows": 77945
+      "absolute_gap": 0.02255567072113296,
+      "average_prediction": 0.45055729150772095,
+      "observed_prevalence": 0.428001620786588,
+      "rows": 78974
     },
     "0.5-0.6": {
-      "absolute_gap": 0.027941306045538905,
-      "average_prediction": 0.5507593154907227,
-      "observed_prevalence": 0.5228180094451838,
-      "rows": 84911
+      "absolute_gap": 0.02626253912915988,
+      "average_prediction": 0.5506119728088379,
+      "observed_prevalence": 0.524349433679678,
+      "rows": 85464
     },
     "0.6-0.7": {
-      "absolute_gap": 0.032990085704107996,
-      "average_prediction": 0.6506475806236267,
-      "observed_prevalence": 0.6176574949195187,
-      "rows": 93003
+      "absolute_gap": 0.027757283842710034,
+      "average_prediction": 0.6506331562995911,
+      "observed_prevalence": 0.622875872456881,
+      "rows": 94274
     },
     "0.7-0.8": {
-      "absolute_gap": 0.034542441868104734,
-      "average_prediction": 0.7504264712333679,
-      "observed_prevalence": 0.7158840293652632,
-      "rows": 99301
+      "absolute_gap": 0.02932470882396765,
+      "average_prediction": 0.7505505681037903,
+      "observed_prevalence": 0.7212258592798226,
+      "rows": 100142
     },
     "0.8-0.9": {
-      "absolute_gap": 0.03823570829518319,
-      "average_prediction": 0.8508172035217285,
-      "observed_prevalence": 0.8125814952265453,
-      "rows": 109669
+      "absolute_gap": 0.03369412090442281,
+      "average_prediction": 0.8505120277404785,
+      "observed_prevalence": 0.8168179068360557,
+      "rows": 107445
     },
     "0.9-1.0": {
-      "absolute_gap": 0.024097044101644705,
-      "average_prediction": 0.9390560984611511,
-      "observed_prevalence": 0.9149590543595064,
-      "rows": 80961
+      "absolute_gap": 0.020993086564636276,
+      "average_prediction": 0.9391754865646362,
+      "observed_prevalence": 0.9181824,
+      "rows": 78125
     }
   },
-  "test_calibration_ece_10_uniform_bins": 0.02348927749133359,
+  "test_calibration_ece_10_uniform_bins": 0.020751323726255304,
   "test_quarter_metrics": {
     "2014Q1": {
-      "Brier": 0.1722419112920761,
-      "Log Loss": 0.5144166946411133,
-      "PR-AUC": 0.8285072824746322,
+      "Brier": 0.17212800681591034,
+      "Log Loss": 0.5141098499298096,
+      "PR-AUC": 0.8287134972441823,
       "Prevalence": 0.5302858844550328,
-      "ROC-AUC": 0.8200494171746355,
+      "ROC-AUC": 0.8203214639228351,
       "Rows": 134320
     },
     "2014Q2": {
-      "Brier": 0.17458541691303253,
-      "Log Loss": 0.5211693048477173,
-      "PR-AUC": 0.8150798445474587,
+      "Brier": 0.1745702028274536,
+      "Log Loss": 0.521085798740387,
+      "PR-AUC": 0.815284601533215,
       "Prevalence": 0.5122358505759792,
-      "ROC-AUC": 0.8164833434866883,
+      "ROC-AUC": 0.8164937398447218,
       "Rows": 117973
     },
     "2014Q3": {
-      "Brier": 0.17413300275802612,
-      "Log Loss": 0.5200010538101196,
-      "PR-AUC": 0.8257000124128792,
+      "Brier": 0.1739741861820221,
+      "Log Loss": 0.5196455717086792,
+      "PR-AUC": 0.8260383276698258,
       "Prevalence": 0.529692917505387,
-      "ROC-AUC": 0.8164992336107818,
+      "ROC-AUC": 0.8169173835795747,
       "Rows": 112771
     },
     "2014Q4": {
-      "Brier": 0.17404285073280334,
-      "Log Loss": 0.519508957862854,
-      "PR-AUC": 0.8100848454413155,
+      "Brier": 0.17330387234687805,
+      "Log Loss": 0.5175917148590088,
+      "PR-AUC": 0.8110440170459956,
       "Prevalence": 0.5002679149142673,
-      "ROC-AUC": 0.8205978012385094,
+      "ROC-AUC": 0.8214870268766269,
       "Rows": 197824
     },
     "2015Q1": {
-      "Brier": 0.17264944314956665,
-      "Log Loss": 0.5158620476722717,
-      "PR-AUC": 0.794400116924672,
+      "Brier": 0.17155204713344574,
+      "Log Loss": 0.5127026438713074,
+      "PR-AUC": 0.7955454282461185,
       "Prevalence": 0.4737570715005319,
-      "ROC-AUC": 0.824421304825868,
+      "ROC-AUC": 0.8252893906315135,
       "Rows": 283886
     }
   }
